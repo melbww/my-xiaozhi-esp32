@@ -11,6 +11,12 @@
 | Crystal | 40 MHz |
 | USB-UART bridge | QinHeng CH343 (`1a86:55d3`), "USB Single Serial" |
 | macOS port | `/dev/cu.usbmodem5D300345091` |
+| Board | `qebabe-xiaoche` (vendor robot-car board; not present in this repo) |
+| Firmware | XiaoZhi `2.1.0`, built Apr 8 2026, ESP-IDF `v5.5.2-dirty` |
+| Display | SSD1306 OLED (`CompactWifiBoard`) |
+| Motor control | ESP32 LEDC PWM, 4 channels (`InitMotorPwm`) |
+| LED control | `LampController` + `led_config` patterns |
+| Device identity | custom `id` partition at `0x800000` (4 KB) |
 
 The board is a custom/unknown robot rather than an obviously named devkit. It can join home Wi-Fi, drive motors, and control LEDs.
 
@@ -70,16 +76,14 @@ uvx --from esptool esptool --chip esp32s3 \
   backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin
 ```
 
-**Status at time of writing:** still running at 230400 baud (~48% after ~6 minutes). The earlier attempts at 921600 and 460800 aborted with serial corruption (`Invalid head of packet (0xFF)`, `Corrupt data, expected 0x1000 bytes...`). 230400 has been stable so far. Do not treat the backup as valid until it completes and is verified.
+**Status: completed successfully.**
 
-**Verification to run after completion:**
+- Size: `16,777,216` bytes (exactly 16 MB)
+- Read time: 762.8 seconds (~12m43s) at 230400 baud
+- SHA-256: `f09041302f1949795d666766e4b2bea9c664314eb06bff8881303a856ee0019a`
+- The earlier attempts at 921600 and 460800 aborted with serial corruption (`Invalid head of packet (0xFF)`, `Corrupt data, expected 0x1000 bytes...`). 230400 completed cleanly.
 
-```sh
-ls -l backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin   # expect 16777216 bytes
-shasum -a 256 backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin
-```
-
-Ideally read a second copy and compare hashes, or run:
+The partition table and app descriptor inside the dump parse correctly, which is a good sanity check. For extra confidence, a second full read or `verify-flash` can be run later:
 
 ```sh
 uvx --from esptool esptool --chip esp32s3 \
@@ -88,6 +92,46 @@ uvx --from esptool esptool --chip esp32s3 \
 ```
 
 The dump contains NVS, which may include Wi-Fi credentials, activation data, and server settings. **Treat the `.bin` as a secret.** It is covered by the repo's `*.bin` ignore rule, but it should still be stored somewhere private.
+
+## Actual partition layout and firmware (from the dump)
+
+Parsed from the partition table at `0x8000`:
+
+| Label | Type | Offset | Size | Notes |
+|---|---|---|---|---|
+| `nvs` | data/nvs | `0x009000` | `0x004000` (16 KB) | Wi-Fi credentials and settings |
+| `otadata` | data/ota | `0x00d000` | `0x002000` (8 KB) | active OTA slot |
+| `phy_init` | data/phy | `0x00f000` | `0x001000` (4 KB) | PHY calibration |
+| `ota_0` | app/ota_0 | `0x020000` | `0x3f0000` (~4 MB) | active application |
+| `ota_1` | app/ota_1 | `0x410000` | `0x3f0000` (~4 MB) | empty (`0xFF`) |
+| `id` | data/0x06 | `0x800000` | `0x001000` (4 KB) | device identity/activation data (custom) |
+| `assets` | data/spiffs | `0x801000` | `0x7ff000` (~8 MB) | voice prompts, models, fonts, images |
+
+App descriptor in `ota_0`:
+
+- Project: `xiaozhi`
+- Version: `2.1.0`
+- Built: `Apr 8 2026 17:28:09`
+- ESP-IDF: `v5.5.2-dirty`
+- `ota_1` is blank, so the device is currently running from `ota_0`.
+
+**Important differences from this repo's default `partitions/v2/16m.csv`:**
+
+- The repo's 16 MB table puts `assets` at `0x800000` with an 8 MB size and has no `id` partition.
+- This device has a custom `id` partition at `0x800000` (4 KB) and `assets` at `0x801000` with size `0x7ff000`.
+- Do not blindly flash a `merged-binary.bin` built with the repo's default 16 MB table: it will not match this layout and may overwrite or ignore the `id` partition. Use the exact dump for rollback, or create a matching partition table for custom builds.
+- The firmware was built with **ESP-IDF v5.5.2-dirty**, while this repo targets ESP-IDF 6.0.1+. Rebuilding the vendor firmware may require the vendor's IDF version or a port.
+
+### Board identity from app strings
+
+- Board: `qebabe-xiaoche` — appears in `./main/boards/qebabe-xiaoche/compact_wifi_board.cc`, the MCP server name, and status output.
+- Base class: `CompactWifiBoard`; display: SSD1306 OLED.
+- Motors: `InitMotorPwm` uses an LEDC timer and 4 channels. MCP tools include `self.motor.turn_left`, `self.motor.turn_right`, `self.motor.quick_forward`, `self.motor.quick_backward`, `self.motor.spin`, etc.
+- LEDs/lamp: `LampController` (GPIO) and `led_config` patterns. MCP tools include `self.lamp.get_state`, `self.lamp.turn_on`, `self.lamp.turn_off`.
+- Device ID: the app logs “Device ID read from partition”; the custom `id` partition at `0x800000` stores it.
+- Vendor URLs: OTA `https://api.tenclass.net/xiaozhi/ota/`; music control `https://xiaozhimusic.ytqhz.com/api/v1/control`.
+
+This confirms the motor and LED behavior is on the ESP32 side and is included in the dump. There is no evidence of a separate motor/servo controller firmware; the motors are driven directly by ESP32 PWM.
 
 ## What the full dump contains
 
@@ -99,6 +143,7 @@ A full 16 MB read is a byte-for-byte image of the ESP32's external flash:
 - the OTA application slot(s) defined by the partition table (typically `ota_0` and `ota_1`)
 - any assets partition (voice prompts, wake-word models, fonts, images)
 - the `nvs` partition, if present (typically Wi-Fi credentials, device settings, activation/pairing state, and calibration values stored by the app)
+- the custom `id` partition on this device (device identity/activation data)
 - PHY calibration data
 - any other partitions defined by this device's partition table
 
@@ -149,6 +194,8 @@ Caveats:
 
 Writing `build/merged-binary.bin` at `0x0` can overwrite the NVS partition, erasing Wi-Fi credentials and settings. The board READMEs in this repo explicitly warn about this (e.g. `main/boards/m5stack/cardputer/README.md`).
 
+On this device the layout is also different: the custom `id` partition at `0x800000` holds the device ID, and `assets` starts at `0x801000`. A merged image built with the repo's default 16 MB table may not preserve that layout. Use a matching partition table and preserve the `id` partition.
+
 Preferred options:
 
 1. Flash individual images (bootloader, partition table, `ota_data_initial.bin`, app, assets) at their documented offsets. This preserves NVS.
@@ -163,6 +210,8 @@ The dump is useful for rollback and identification, not for editing. To change b
 python3 scripts/build.py --list-boards
 python3 scripts/build.py <board-directory> --name <variant>
 ```
+
+`qebabe-xiaoche` is **not** in this repo, so `--list-boards` will not show it. You need the vendor's source or to add a new board variant. The repo has `CompactWifiBoard` and `main/boards/common/lamp_controller.h`, which this firmware appears to use, but the board-specific pins/config live in the vendor fork. The dump can identify the app version, partition layout, and feature strings, but it cannot recover the original source or pin definitions. The vendor firmware was also built with ESP-IDF `v5.5.2-dirty`, not the repo's IDF 6.x target.
 
 Keep a known-good set of artifacts:
 
@@ -191,12 +240,21 @@ If the robot still uses this, a vendor update can overwrite custom firmware. Poi
 
 ## Open questions / next steps
 
-1. Verify the completed backup: exact size, SHA-256, ideally a second read or `verify-flash`.
-2. Parse the partition table from the dump at offset `0x8000` and confirm the actual layout (NVS size, OTA slots, assets).
-3. Search the app binary for board name, firmware version, and `config.json` identifiers to identify the exact board/variant.
-4. Check whether the device has an `nvs_keys` partition or NVS encryption enabled.
-5. Identify whether motors/LEDs are driven directly by the ESP32 or by a separate controller; back up any separate controller/servo/SD-card state if present.
-6. Test a restore only after the dump is verified; keep a second copy off-device.
+Completed:
+
+- Full 16 MB backup captured and size checked; SHA-256 recorded.
+- Partition table parsed (see above).
+- App version/project/IDF identified (`xiaozhi` 2.1.0, IDF `v5.5.2-dirty`).
+- Board identified from app strings: `qebabe-xiaoche`.
+- Motor/LED control confirmed on the ESP32 side: LEDC PWM + `LampController`; MCP tools present.
+
+Still open:
+
+1. Optional: run `verify-flash` or a second full read and compare SHA-256.
+2. Obtain the vendor's `qebabe-xiaoche` source or reconstruct the board config (pins, display, motor channels) to build custom firmware. The board is not in this repo.
+3. Check NVS encryption. No `nvs_keys` partition and eFuse key slots are `USER`, so NVS is likely unencrypted; confirm before relying on cross-chip restore.
+4. Check for a separate motor/servo controller or SD card; none is evident, but inspect the hardware.
+5. Test a restore only after verification; keep a second copy off-device.
 
 ## Commands used
 

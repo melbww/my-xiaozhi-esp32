@@ -20,3 +20,8 @@ save what you found or any useful information to a doc under /Users/wenwu/work/m
 ---
 
 Why it corrupted previously? Does the writing speed have an impact on the quality?
+
+
+---
+
+what does `Board | `qebabe-xiaoche` (vendor robot-car board; not present in this repo)` mean? so we can't use the repo to for it?
