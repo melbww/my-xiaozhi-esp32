@@ -12,8 +12,10 @@
 | USB-UART bridge | QinHeng CH343 (`1a86:55d3`), "USB Single Serial" |
 | macOS port | `/dev/cu.usbmodem5D300345091` |
 | Board | `qebabe-xiaoche` (vendor robot-car board; not present in this repo) |
+| Board hardware | Freenove-compatible ESP32-S3-WROOM-1 dev board, 16 MB flash / 8 MB PSRAM |
 | Firmware | XiaoZhi `2.1.0`, built Apr 8 2026, ESP-IDF `v5.5.2-dirty` |
 | Display | SSD1306 OLED (`CompactWifiBoard`) |
+| Audio | MAX98357A I2S amplifier + speaker |
 | Motor control | ESP32 LEDC PWM, 4 channels (`InitMotorPwm`) |
 | LED control | `LampController` + `led_config` patterns |
 | Device identity | custom `id` partition at `0x800000` (4 KB) |
@@ -147,6 +149,36 @@ This device is **ESP32-S3, 16 MB**, with `ota_0`/`ota_1` and a custom `id` parti
 
 The page is a firmware distribution page, not a source repository. It mentions a `PROJECT.md` with hardware/pins and a Douyin fan group for the wiring list. No public source repo for `qebabe-xiaoche` was found via search. Getting the vendor's S3 source or `PROJECT.md` is the cleanest path to customization.
 
+## Vendor wiring diagram (`IMG_2133.JPG`)
+
+The vendor supplied a wiring diagram at `/Users/wenwu/Downloads/IMG_2133.JPG`. It identifies the hardware:
+
+| Module | Details |
+|---|---|
+| ESP32-S3 dev board | ESP32-S3-WROOM-1, Freenove-compatible header order, two USB-C ports, 16 MB flash / 8 MB PSRAM |
+| Audio | MAX98357A I2S amplifier (purple board: `LRC`, `DIN`, `BCLK`, `SD`, `GAIN`, `VIN`) + speaker on the `+`/`-` pads |
+| Distance sensor | VL53L0X-class ToF module, 6 pins: `VIN`, `GND`, `SDA`, `SCL`, `INT`, `SHUT` (I2C) |
+| LiDAR | Round 5-pin module: `VCC`, `GND`, `TX`, `RX`, `SDA` (likely TF-Luna-class; UART and/or I2C) |
+| Display | SSD1306 OLED, 4 pins: `GND`, `VCC`, `SCL`, `SDA` (I2C) |
+| Button | 3-pin module: `VCC`, `GND`, `OUT` |
+| Motor driver | L298N-style dual H-bridge: `IN1`–`IN4`, `OUT1`–`OUT4`; drives two TT gear motors |
+| Power | 18650 battery holder/charger/boost board + power switch, feeding the ESP32 5V input and the motor driver |
+
+Important correction: the round black object on the left is the **speaker**, not a camera. The purple board is the **MAX98357A audio amplifier**.
+
+The diagram confirms the ESP32-side audio, motor, LED, display, button, and sensor hardware. It does **not** give a clean netlist: several wire colors are reused, and the exact GPIOs for the I2S bus, LiDAR UART, OLED/ToF I2C, button, motor `IN1`–`IN4`, and lamp/LED still need to be traced or confirmed against the vendor's `PROJECT.md`.
+
+The Freenove pinout provides useful constraints:
+
+- Camera/header pins: GPIO4–GPIO18
+- Native USB: GPIO19/GPIO20 (do not reuse)
+- PSRAM: GPIO35–GPIO37 (do not reuse when OPI PSRAM is enabled)
+- SD card: GPIO38–GPIO40
+- Onboard WS2812: GPIO48
+- Strapping pins: GPIO0, GPIO3, GPIO45, GPIO46
+
+Some of these are repurposed by the vendor for I2S, LiDAR, and motor PWM. A new board definition must therefore use the vendor's actual pin map, not just the Freenove defaults.
+
 ## What the full dump contains
 
 A full 16 MB read is a byte-for-byte image of the ESP32's external flash:
@@ -265,10 +297,11 @@ Completed:
 Still open:
 
 1. Optional: run `verify-flash` or a second full read and compare SHA-256.
-2. Obtain the vendor's S3 `qebabe-xiaoche` source or `PROJECT.md`, or reconstruct the board config (pins, display, motor channels). The C3 page found is a different variant and does not provide S3 source. The board is not in this repo.
-3. Check NVS encryption. No `nvs_keys` partition and eFuse key slots are `USER`, so NVS is likely unencrypted; confirm before relying on cross-chip restore.
-4. Check for a separate motor/servo controller or SD card; none is evident, but inspect the hardware.
-5. Test a restore only after verification; keep a second copy off-device.
+2. Trace/confirm the exact GPIOs from the vendor wiring diagram: I2S (`LRC`/`DIN`/`BCLK`/`SD`), LiDAR UART, OLED/ToF I2C, button, motor `IN1`–`IN4`, and lamp/LED.
+3. Obtain the vendor's S3 `qebabe-xiaoche` source or `PROJECT.md`, or reconstruct the board config (pins, display, motor channels). The C3 page found is a different variant and does not provide S3 source. The board is not in this repo.
+4. Check NVS encryption. No `nvs_keys` partition and eFuse key slots are `USER`, so NVS is likely unencrypted; confirm before relying on cross-chip restore.
+5. Check for a separate motor/servo controller or SD card; none is evident, but inspect the hardware.
+6. Test a restore only after verification; keep a second copy off-device.
 
 ## Commands used
 
