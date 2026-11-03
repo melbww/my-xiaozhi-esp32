@@ -16,3 +16,7 @@ are the 2 usb ports the same?
 ---
 
 save what you found or any useful information to a doc under /Users/wenwu/work/my-xiaozhi-esp32/my_exploration/
+
+---
+
+Why it corrupted previously? Does the writing speed have an impact on the quality?

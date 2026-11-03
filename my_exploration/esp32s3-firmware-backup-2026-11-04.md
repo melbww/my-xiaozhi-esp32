@@ -14,6 +14,33 @@
 
 The board is a custom/unknown robot rather than an obviously named devkit. It can join home Wi-Fi, drive motors, and control LEDs.
 
+## USB ports (dual USB-C)
+
+The board matches the Freenove ESP32-S3-WROOM dual-USB arrangement (the 16 MB N16R8 variant uses the same layout):
+
+| Port | Chip | Connected to | Use |
+|---|---|---|---|
+| UART / COM (currently used) | WCH CH343 (`1a86:55d3`) | ESP32-S3 UART0, TX GPIO43 / RX GPIO44 | Flashing, backup, serial console; recommended for `esptool` |
+| USB / OTG | native ESP32-S3 USB | D- GPIO19 / D+ GPIO20 | USB-Serial/JTAG, USB device/host; can also flash in download mode |
+
+They are **not the same**:
+
+- The **CH343 port** is a USB-to-UART bridge. It is the traditional, reliable flashing/console port and remains available even if the firmware uses the native USB for something else.
+- The **native USB port** is wired directly to the ESP32-S3. It supports USB-Serial/JTAG and USB-OTG; it may enumerate as an Espressif device (VID `303a`) instead of a CH343 device. If the firmware switches it to USB host/device mode, the serial console can disappear.
+
+For backup and normal flashing, stay on the CH343 port (`/dev/cu.usbmodem5D300345091`). No need to move to the other port. The other port is useful for JTAG debugging or USB host/device work.
+
+Some boards instead use a **single** USB-C port plus a CH334 hub, exposing two logical COM ports. Check the board labels/schematic if unsure. To identify a port, plug it in and check `ls /dev/cu.*` and the USB VID/PID:
+
+- `1a86:55d3` = CH343 UART
+- `303a:1001` = Espressif USB JTAG/serial debug unit (native)
+
+Sources:
+
+- Betaflight bridge README (Freenove dual-USB details): <https://github.com/betaflight/bridge/blob/master/README.md>
+- Freenove XiaoZhi guide (CH343 and correct Type-C port): <https://docs.freenove.com/projects/fnk0102/en/latest/fnk0102/codes/xiaozhi/xiaozhi_EN/XiaoZhi_AI_User_Guide_%28Based_on_FNK0102%29.html>
+- Espressif serial connection guide: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/get-started/establish-serial-connection.html>
+
 ## Security state (from `espefuse summary`)
 
 | Feature | State |
