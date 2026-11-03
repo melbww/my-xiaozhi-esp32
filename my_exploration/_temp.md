@@ -1,0 +1,1 @@
+So I actually have a robot using this service on a ESP32 chip. Can I read the flashed firmware and back it up so I can do my own customization and for rollback if needed?
