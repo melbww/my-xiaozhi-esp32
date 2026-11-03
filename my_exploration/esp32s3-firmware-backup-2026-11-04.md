@@ -133,6 +133,20 @@ App descriptor in `ota_0`:
 
 This confirms the motor and LED behavior is on the ESP32 side and is included in the dump. There is no evidence of a separate motor/servo controller firmware; the motors are driven directly by ESP32 PWM.
 
+### Vendor page found (C3 variant, not this S3 board)
+
+The page <https://330p035.my/share/e3d0d2fbc7d160e1> is for **`qebabe-xiaoche-c3`**, not this device:
+
+- ESP32-C3, 4 MB flash
+- partition table only `factory`; no OTA slots
+- firmware v2.2.6 / v2.1.0, ~2.88 MB / 2.17 MB
+- full image flashes at `0x0`; server OTA is skipped
+- based on `xiaozhi-esp32`, published by `mohutubiao`
+
+This device is **ESP32-S3, 16 MB**, with `ota_0`/`ota_1` and a custom `id` partition. The C3 image is **not compatible** — do not flash it to this S3 board.
+
+The page is a firmware distribution page, not a source repository. It mentions a `PROJECT.md` with hardware/pins and a Douyin fan group for the wiring list. No public source repo for `qebabe-xiaoche` was found via search. Getting the vendor's S3 source or `PROJECT.md` is the cleanest path to customization.
+
 ## What the full dump contains
 
 A full 16 MB read is a byte-for-byte image of the ESP32's external flash:
@@ -251,7 +265,7 @@ Completed:
 Still open:
 
 1. Optional: run `verify-flash` or a second full read and compare SHA-256.
-2. Obtain the vendor's `qebabe-xiaoche` source or reconstruct the board config (pins, display, motor channels) to build custom firmware. The board is not in this repo.
+2. Obtain the vendor's S3 `qebabe-xiaoche` source or `PROJECT.md`, or reconstruct the board config (pins, display, motor channels). The C3 page found is a different variant and does not provide S3 source. The board is not in this repo.
 3. Check NVS encryption. No `nvs_keys` partition and eFuse key slots are `USER`, so NVS is likely unencrypted; confirm before relying on cross-chip restore.
 4. Check for a separate motor/servo controller or SD card; none is evident, but inspect the hardware.
 5. Test a restore only after verification; keep a second copy off-device.
