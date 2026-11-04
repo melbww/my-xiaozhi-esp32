@@ -2,9 +2,47 @@
 
 **Date:** 2026-11-04
 
-**Filename note:** This file started as a firmware-backup log. It now covers the
+**Filename note:** This file was moved from
+`esp32s3-firmware-backup-2026-11-04.md`. The
+old name reflected the original backup-only scope. The content now covers the
 full bring-up: hardware identification, backup, board definition, build, flash,
-first boot, and testing. The path is kept for continuity.
+first boot, and testing.
+
+## How to use this doc
+
+This is the single context document for the Qebabe Xiaoche bring-up. A new
+agent should read it top to bottom, then:
+
+1. Check the robot’s serial port: `ls /dev/cu.*`; expect CH343 `1a86:55d3`.
+2. Source ESP-IDF: `. /Users/wenwu/esp/esp-idf/export.sh`.
+3. Check `git status` (see “Worktree state” below).
+4. Build: `python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche`.
+5. Flash individual images (preserves NVS and the `id` partition).
+6. Capture the boot log and test display/audio/motors/LED.
+
+## Project goal
+
+Use the upstream `xiaozhi-esp32` repo to customize the vendor `qebabe-xiaoche`
+robot while keeping a full-flash rollback. Priorities:
+
+- preserve Wi-Fi/NVS and the vendor `id` partition;
+- verify display, microphone, speaker, and wake word;
+- keep the motor/LED MCP tools compatible with the vendor’s S3 2.1.0 set;
+- never flash the vendor C3 image or a merged image at `0x0` to this S3 board.
+
+## Worktree state (as of 2026-11-04)
+
+- Board definition is **committed** (`22a4d54`; later commits `448b450`,
+  `387d340`, and `36cf3b3` updated it).
+- `main/CMakeLists.txt` and `main/Kconfig.projbuild` are committed.
+- `build-qebabe.log` is a generated build log that is currently tracked in
+  `36cf3b3`. It should be untracked and ignored when cleaning up:
+  `git rm --cached build-qebabe.log`, then add `build-qebabe.log` to
+  `.gitignore`.
+- Generated `build/` and `sdkconfig` are ignored by `.gitignore`.
+- Backup: `backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin` (gitignored `*.bin`).
+- Vendor files: `my_exploration/from_vendor/`;
+  RAR at `my_exploration/ESP32-S3 CAM开发板资料.rar`.
 
 ## Current status
 
@@ -185,6 +223,9 @@ Added `main/boards/qebabe-xiaoche/`:
 | `compact_wifi_board.cc` | Wi-Fi board + SSD1306 + INMP441/MAX98357 + L298N PWM + MCP tools |
 | `README.md` | Hardware/build/flash notes |
 
+This is a **reconstruction** from the vendor BOM/diagram, not the vendor’s
+original `compact_wifi_board.cc`. The vendor’s full source was not available.
+
 Also added:
 
 - `CONFIG_BOARD_TYPE_QEBABE_XIAOCHE` in `main/Kconfig.projbuild`
@@ -229,6 +270,23 @@ Not implemented:
 - The vendor `self.rgb_led.*` tools; the on-board WS2812 is used as the status
   LED.
 
+### MCP tool parameters
+
+| Tool | Parameters |
+|---|---|
+| `self.motor.drive` | `steer` -100..100; `throttle` -100..100; `duration_ms` 0..15000 (0 = continuous) |
+| `self.motor.stop` | none |
+| `self.motor.move_forward` / `move_backward` | `speed_percent` 0..100 (default 100); `duration_ms` default 5000 |
+| `self.motor.spin_around` | `speed_percent` 0..100; `duration_ms` default 1000 |
+| `self.motor.turn_left` / `turn_right` | `speed_percent` 0..100; `duration_ms` default 600 |
+| `self.motor.quick_forward` | `speed_percent` 60..100; `duration_ms` default 1000 |
+| `self.motor.quick_backward` | `speed_percent` 0..100; `duration_ms` default 1000 |
+| `self.motor.wiggle` | `speed_percent` 0..100; `duration_ms` default 300 |
+| `self.motor.dance` | `speed_percent` 0..100 (forward briefly) |
+| `self.motor.forward` / `backward` | `speed` 0..100; `duration_ms` default 1000 |
+| `self.car.act` | `action` forward/backward/turn_left/turn_right/spin/stop; `speed` 0..100; `duration_ms` default 1000 |
+| `self.lamp.*` | get_state/turn_on/turn_off; GPIO8 active high |
+
 ## Build environment
 
 - ESP-IDF `release/v6.1` at `/Users/wenwu/esp/esp-idf`
@@ -251,6 +309,16 @@ Build result:
 - Bootloader and partition table generated successfully
 - `build/merged-binary.bin` generated, but **do not flash it at `0x0`** because
   it can overwrite the `id` partition/NVS. Use individual images.
+
+## Validation performed
+
+- `python3 scripts/build.py --list-boards` shows `qebabe-xiaoche` with target
+  `esp32s3`.
+- `gen_esp32part.py` validates `main/boards/qebabe-xiaoche/partitions.csv`.
+- `python3 -m unittest scripts.tests.test_build -v` passes 82 tests.
+- `clang-format --dry-run -Werror` passes for the board C/C++ files.
+- ESP-IDF 6.1 build succeeds; flash hash verified.
+- First boot log confirms display/audio/Wi-Fi/MQTT/wake word.
 
 ## Flash procedure
 
@@ -298,6 +366,29 @@ Boot log confirms:
 
 This confirms the display init, audio output, microphone/wake word, Wi-Fi, MQTT,
 and the MCP registration path.
+
+### Serial monitor / boot log capture
+
+```sh
+# Interactive monitor
+idf.py -p /dev/cu.usbmodem5D300345091 monitor
+
+# Non-interactive capture with reset (IDF Python env has pyserial)
+/Users/wenwu/.espressif/python_env/idf6.1_py3.14_env/bin/python3 - <<'PY'
+import serial, time
+ser = serial.Serial('/dev/cu.usbmodem5D300345091', 115200, timeout=0.5)
+ser.setDTR(False)
+ser.setRTS(True)
+time.sleep(0.15)
+ser.setRTS(False)
+start = time.time()
+while time.time() - start < 20:
+    data = ser.read(4096)
+    if data:
+        print(data.decode('utf-8', 'replace'), end='')
+ser.close()
+PY
+```
 
 ## Why Wi-Fi, UUID, and the name survived the reflash
 
@@ -394,6 +485,31 @@ uvx --from esptool esptool --chip esp32s3 \
 
 Do not use `idf.py erase-flash` unless you intend to erase NVS, the `id`
 partition, and assets.
+
+## Do not do
+
+- Do not flash `my_exploration/from_vendor/2.5ai_voice_display_oled_dog.ino.merged.bin`;
+  it is a different project/partition layout.
+- Do not flash `build/merged-binary.bin` at `0x0`; it can overwrite the `id`
+  partition and NVS.
+- Do not run `idf.py erase-flash` unless you intend to erase everything.
+- Do not write NVS (`0x9000`–`0xD000`) or `id` (`0x800000`) unless restoring
+  from the backup or deliberately re-provisioning.
+- Do not change pins of an existing board; add a new variant.
+
+## Takeover checklist for a new agent
+
+1. Read this doc and `main/boards/qebabe-xiaoche/README.md`.
+2. `ls /dev/cu.*`; confirm CH343 `1a86:55d3`.
+3. `. /Users/wenwu/esp/esp-idf/export.sh`; confirm `idf.py --version` is 6.1.
+4. `git status`; the board definition is committed. Expect the new context doc
+   and the old-path pointer as doc changes.
+5. Build: `python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche`.
+6. Flash individual images with esptool (preserves `id`/NVS).
+7. Capture the boot log; confirm `SKU=qebabe-xiaoche`, display, audio, Wi-Fi,
+   MQTT.
+8. Test motors/LED; adjust direction/PWM if needed.
+9. Keep the 16 MB backup; do not erase `id`/NVS.
 
 ## Open questions / next steps
 
