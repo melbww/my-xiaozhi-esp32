@@ -318,6 +318,41 @@ https://api.tenclass.net/xiaozhi/ota/
 
 If the robot still uses this, a vendor update can overwrite custom firmware. Point `CONFIG_OTA_URL` at your own server or disable the version check. Also, changing the board name/identity can make OTA serve the wrong firmware or reject the device.
 
+## Board definition created in this repo
+
+Added `main/boards/qebabe-xiaoche/`:
+
+| File | Purpose |
+|---|---|
+| `config.h` | I2S, OLED, buttons, L298N, LED pins |
+| `config.json` | ESP32-S3, 16 MB, 128x64 OLED, custom partition CSV |
+| `partitions.csv` | vendor layout including `id` at `0x800000` |
+| `compact_wifi_board.cc` | Wi-Fi board + SSD1306 + INMP441/MAX98357 + L298N PWM + MCP tools |
+| `README.md` | hardware/build/flash notes |
+
+Also added `CONFIG_BOARD_TYPE_QEBABE_XIAOCHE` to `main/Kconfig.projbuild` and a `BOARD_DIR` branch in `main/CMakeLists.txt`.
+
+Build:
+
+```sh
+python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche
+```
+
+Validation performed:
+
+- `python3 scripts/build.py --list-boards` shows `qebabe-xiaoche` with the correct target/config.
+- `gen_esp32part.py` validates the partition CSV.
+- `python3 -m unittest scripts.tests.test_build -v` passes (82 tests).
+- Not compiled with ESP-IDF yet: this environment has no ESP-IDF installation. The board code follows the repo's existing `bread-compact-wifi` patterns.
+
+Caveats:
+
+- Audio/OLED/button pins are traced from the vendor diagram; verify them on hardware.
+- Motor direction/PWM may need swapping/adjusting; the L298N is driven at 20 kHz, 10-bit.
+- The vendor's full MCP action-sequence tools are not replicated; basic `self.motor.*` and `self.car.act` are implemented.
+- The upstream firmware does not implement the vendor's `espdeviceverifyservice.ytqhz.com` license check. The `id` partition is preserved but not read; use the vendor firmware/backup for the original activation flow.
+- `idf.py flash` preserves the `id` partition; do not use `erase-flash` or a merged image at `0x0` without the backup.
+
 ## Open questions / next steps
 
 Completed:
@@ -330,11 +365,11 @@ Completed:
 
 Still open:
 
-1. Optional: run `verify-flash` or a second full read and compare SHA-256.
-2. Trace/confirm the exact GPIOs from the vendor wiring diagram: I2S (`LRC`/`DIN`/`BCLK`/`SD`), LiDAR UART, OLED/ToF I2C, button, motor `IN1`–`IN4`, and lamp/LED.
-3. Obtain the vendor's S3 `qebabe-xiaoche` source or `PROJECT.md`, or reconstruct the board config (pins, display, motor channels). The C3 page found is a different variant and does not provide S3 source. The board is not in this repo.
-4. Check NVS encryption. No `nvs_keys` partition and eFuse key slots are `USER`, so NVS is likely unencrypted; confirm before relying on cross-chip restore.
-5. Check for a separate motor/servo controller or SD card; none is evident, but inspect the hardware.
+1. Compile with ESP-IDF 6.1: `python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche`. The board code follows `bread-compact-wifi`, but no local IDF was available to compile it here.
+2. Flash over the CH343 UART port and verify: INMP441 mic, MAX98357 speaker, SSD1306 OLED, optional buttons, L298N motor direction/PWM, and the GPIO8 LED.
+3. Optional: run `verify-flash` or a second full read and compare SHA-256.
+4. Decide whether to reimplement the vendor's action sequences, license check, and OTA behavior; the vendor's S3 source/`PROJECT.md` is still the best reference.
+5. Check NVS encryption before relying on cross-chip restore.
 6. Test a restore only after verification; keep a second copy off-device.
 
 ## Commands used
