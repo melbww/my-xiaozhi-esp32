@@ -149,35 +149,69 @@ This device is **ESP32-S3, 16 MB**, with `ota_0`/`ota_1` and a custom `id` parti
 
 The page is a firmware distribution page, not a source repository. It mentions a `PROJECT.md` with hardware/pins and a Douyin fan group for the wiring list. No public source repo for `qebabe-xiaoche` was found via search. Getting the vendor's S3 source or `PROJECT.md` is the cleanest path to customization.
 
-## Vendor wiring diagram (`IMG_2133.JPG`)
+## Vendor files received
 
-The vendor supplied a wiring diagram at `/Users/wenwu/Downloads/IMG_2133.JPG`. It identifies the hardware:
+The vendor supplied these in `my_exploration/from_vendor/`:
 
-| Module | Details |
+| File | What it is |
 |---|---|
-| ESP32-S3 dev board | ESP32-S3-WROOM-1, Freenove-compatible header order, two USB-C ports, 16 MB flash / 8 MB PSRAM |
-| Audio | MAX98357A I2S amplifier (purple board: `LRC`, `DIN`, `BCLK`, `SD`, `GAIN`, `VIN`) + speaker on the `+`/`-` pads |
-| Distance sensor | VL53L0X-class ToF module, 6 pins: `VIN`, `GND`, `SDA`, `SCL`, `INT`, `SHUT` (I2C) |
-| LiDAR | Round 5-pin module: `VCC`, `GND`, `TX`, `RX`, `SDA` (likely TF-Luna-class; UART and/or I2C) |
-| Display | SSD1306 OLED, 4 pins: `GND`, `VCC`, `SCL`, `SDA` (I2C) |
-| Button | 3-pin module: `VCC`, `GND`, `OUT` |
-| Motor driver | L298N-style dual H-bridge: `IN1`–`IN4`, `OUT1`–`OUT4`; drives two TT gear motors |
-| Power | 18650 battery holder/charger/boost board + power switch, feeding the ESP32 5V input and the motor driver |
+| `小智AI机器人配件清单.txt` | BOM: ESP32-S3 N16R8, L298N, INMP441, MAX98357, 0.96" OLED, 1S protection, 5V boost, 3-pin switch, 2415 speaker, 2x N20 motors, 2x 16340 batteries |
+| `小智AI版机器人接线图.jpg` | The accurate wiring diagram for this robot |
+| `2.5ai_voice_display_oled_dog.ino.merged.bin` | 16 MB Arduino merged image for a different project (robot dog); partition table `nvs/app/spiffs/coredump`, IDF v5.4.1. **Not compatible with this OTA-partitioned S3 robot; do not flash.** |
+| `../ESP32-S3 CAM开发板资料.rar` | Generic Freenove ESP32-S3 CAM board materials (tutorials, libraries, datasheets, pinout). Useful for the board hardware, not the vendor's qebabe source. |
 
-Important correction: the round black object on the left is the **speaker**, not a camera. The purple board is the **MAX98357A audio amplifier**.
+The first diagram (`IMG_2133.JPG`) included LiDAR/VL53L0X and was **not accurate** for this unit. The accurate diagram is `小智AI版机器人接线图.jpg`; it shows no LiDAR, no VL53L0X, and no camera.
 
-The diagram confirms the ESP32-side audio, motor, LED, display, button, and sensor hardware. It does **not** give a clean netlist: several wire colors are reused, and the exact GPIOs for the I2S bus, LiDAR UART, OLED/ToF I2C, button, motor `IN1`–`IN4`, and lamp/LED still need to be traced or confirmed against the vendor's `PROJECT.md`.
+### Accurate hardware / pin map
 
-The Freenove pinout provides useful constraints:
+From the accurate diagram + BOM:
 
-- Camera/header pins: GPIO4–GPIO18
-- Native USB: GPIO19/GPIO20 (do not reuse)
-- PSRAM: GPIO35–GPIO37 (do not reuse when OPI PSRAM is enabled)
-- SD card: GPIO38–GPIO40
-- Onboard WS2812: GPIO48
-- Strapping pins: GPIO0, GPIO3, GPIO45, GPIO46
+| Function | Pins / notes |
+|---|---|
+| Motors (L298N) | `IN1=GPIO11`, `IN2=GPIO12`, `IN3=GPIO13`, `IN4=GPIO14` (explicit in the diagram) |
+| LED/lamp | `GPIO8` (BOM: “正极接到8号引脚” = positive to pin 8) |
+| OLED SSD1306 | `SDA=GPIO41`, `SCL=GPIO42` (traced from the diagram) |
+| Buttons (optional) | `Volume+ = GPIO40`, `Volume- = GPIO39`, `Boot = GPIO0` (traced; the three buttons can be omitted) |
+| INMP441 mic | `WS=GPIO4`, `SCK=GPIO5`, `SD=GPIO6`, `L/R=GND`, `VDD=3V3`, `GND=GND` |
+| MAX98357 amp | `DIN=GPIO7`, `BCLK=GPIO15`, `LRC=GPIO16`, `SD=3V3/5V`, `GAIN=GND`, `VIN=5V`, `GND=GND` |
+| Speaker | 2415 8Ω 1W cavity speaker on the amp `+`/`-` |
+| Power | 2x 16340 / 18650 1S battery -> 1S protection -> 3-pin switch -> 5V boost -> ESP32 5V and L298N |
+| Sensors | No LiDAR, no VL53L0X, no camera on this unit |
 
-Some of these are repurposed by the vendor for I2S, LiDAR, and motor PWM. A new board definition must therefore use the vendor's actual pin map, not just the Freenove defaults.
+Caveats:
+
+- Motor and LED pins are explicit in the vendor diagram/BOM.
+- OLED, button, mic, and amp pins are traced from the diagram; confirm them with a test build before relying on them.
+- The board is an ESP32-S3 N16R8 development board with two USB-C ports; the CH343 UART port is the one used for flashing/backup.
+- The GPIO8 LED pin is 3V; use a 3V LED or a proper driver, not a 5V strip directly.
+- The motors are N20 3V 30rpm gear motors; the L298N is powered from the 5V boost/battery rail.
+
+This is enough to create a `main/boards/qebabe-xiaoche/` board definition in this repo. The missing piece is no longer the pin map; it is the vendor's board-specific behavior (motor ramp/direction, LED patterns, MCP tools) and the `id` partition/OTA details, which we can reimplement or preserve.
+
+## Information to request from the vendor
+
+The diagram may not match this unit. Ask for the **board support package**, not another picture.
+
+**Minimal ask (what we cannot derive):** the `main/boards/qebabe-xiaoche/` directory — especially `compact_wifi_board.cc` for the motor/LED/MCP behavior. The pin map is now mostly reconstructed from the accurate diagram + BOM; ask the vendor only to confirm the traced OLED/button/audio pins if possible. We already know the IDF version (`v5.5.2-dirty`), partition layout, OTA URL, and device ID (`RUK5IES0L128X`) from the dump.
+
+### Must have
+
+1. **GPIO pin table / netlist** — every used pin, its function, direction, active level, pull-up, and PWM channel. Specifically:
+   - I2S: `BCLK`, `LRCLK`/`WS`, `DIN`, `SD`/enable; microphone pins and model
+   - OLED: `SDA`, `SCL`, I2C address, reset
+   - Button: GPIO, active level, GPIO vs ADC
+   - Motor driver: model, `IN1`–`IN4`, `ENA`/`ENB`, PWM frequency, direction logic
+   - LED/lamp: type (WS2812 vs plain PWM), GPIO, count, color order
+   - Battery: voltage-divider ADC GPIO, charge status, power latch
+   - Any sensors actually populated (none expected on this unit)
+2. **Board support files** — `main/boards/qebabe-xiaoche/` (`config.h`, `config.json`, board `.cc`), `sdkconfig.defaults`, partition CSV, `idf_component.yml`.
+3. **Build environment** — exact ESP-IDF version/commit (they used `v5.5.2-dirty`), build command, component versions.
+4. **Partition/device identity** — format and provisioning of the `id` partition at `0x800000`; whether NVS is encrypted.
+5. **OTA/activation** — OTA URL, board identifier/headers, activation flow; whether custom firmware can still use the vendor service.
+6. **Behavior specs** — motor ramp/auto-stop/speed limits, LED patterns, MCP tool schemas (`self.motor.*`, `self.car.*`, `self.lamp.*`).
+7. **Actual configuration** — confirm no LiDAR/VL53L0X/camera on this unit, and confirm the traced OLED/button/audio pins.
+
+If the source cannot be shared, ask for at least the pin table, board config, partition table, and IDF version; the motor/LED/MCP code can be reimplemented on upstream.
 
 ## What the full dump contains
 
