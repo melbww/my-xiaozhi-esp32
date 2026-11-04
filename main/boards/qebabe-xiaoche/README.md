@@ -63,8 +63,26 @@ python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche
 Then flash over the CH343 UART port:
 
 ```sh
-idf.py -p /dev/cu.usbmodemXXXX flash monitor
+idf.py -p /dev/cu.usbmodemXXXX flash
+idf.py -p /dev/cu.usbmodemXXXX monitor
 ```
+
+If `idf.py` reports a `python` vs `python3` environment mismatch, flash the
+individual images directly. This also preserves NVS and the `id` partition:
+
+```sh
+python3 -m esptool --chip esp32s3 -p /dev/cu.usbmodemXXXX -b 230400 \
+  --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-size 16MB --flash-freq 80m \
+  0x0 build/bootloader/bootloader.bin \
+  0x8000 build/partition_table/partition-table.bin \
+  0xd000 build/ota_data_initial.bin \
+  0x20000 build/xiaozhi.bin \
+  0x801000 build/generated_assets.bin
+```
+
+Do not flash `build/merged-binary.bin` at `0x0`; it can overwrite the `id`
+partition and NVS.
 
 ## Partition layout
 

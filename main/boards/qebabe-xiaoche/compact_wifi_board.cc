@@ -168,7 +168,6 @@ private:
             channel_config.gpio_num = motor_pins[i];
             channel_config.speed_mode = LEDC_LOW_SPEED_MODE;
             channel_config.channel = static_cast<ledc_channel_t>(LEDC_CHANNEL_0 + i);
-            channel_config.intr_type = LEDC_INTR_DISABLE;
             channel_config.timer_sel = kMotorTimer;
             channel_config.duty = 0;
             channel_config.hpoint = 0;
