@@ -44,8 +44,14 @@ BOM; the vendor's original `compact_wifi_board.cc` was not available.
 
 The motor and LED pins are explicit in the vendor diagram/BOM. The audio,
 OLED, and button pins are traced from the diagram; verify them on hardware
-before assuming they are correct. The L298N `ENA`/`ENB` jumpers must be
-installed (or tied high); this firmware drives only `IN1`–`IN4`.
+before assuming they are correct.
+
+The firmware drives only the L298N `IN1`–`IN4` inputs, matching the vendor
+firmware. On a stock L298N module the `ENA`/`ENB` jumper caps connect the
+enable pins to 5 V; if the robot already moved with the vendor firmware, those
+jumpers are already installed and no change is needed. If the motors do not
+move after reflashing, check that the `ENA`/`ENB` jumpers are still in place
+(or that both pins are tied high).
 
 ## Build
 
