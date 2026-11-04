@@ -93,9 +93,16 @@ need the original activation flow.
 
 ## Known limitations
 
-- The vendor's full MCP tool set (`self.motor.sequence`, `self.car.act`
-  sequences, `self.sensor.*`, etc.) is not replicated. This board provides
-  basic `self.motor.*` tools and a simple `self.car.act`.
+- The S3 2.1.0 motor tool names are implemented: `self.motor.move_forward`,
+  `move_backward`, `spin_around`, `turn_left`, `turn_right`, `quick_forward`,
+  `quick_backward`, `wiggle`, `dance`, `stop`, plus `self.motor.drive` and a
+  simple `self.car.act`.
+- The newer C3 2.2.x `self.motor.sequence` / `self.car.act` action-sequence
+  system is not present in the S3 2.1.0 dump and is not replicated here.
+- Fall detection for `move_forward` / `quick_forward` is not implemented because
+  this unit has no edge/distance sensor.
+- The vendor's `self.rgb_led.*` tools are not replicated; the on-board WS2812 is
+  used as the status LED.
 - The vendor firmware was built with ESP-IDF `v5.5.2-dirty`; this repo targets
   ESP-IDF 6.x. Expect minor API/behavior differences.
 - The OLED orientation (`DISPLAY_MIRROR_X/Y`) may need adjusting for the

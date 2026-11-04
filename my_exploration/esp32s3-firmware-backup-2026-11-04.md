@@ -349,7 +349,8 @@ Caveats:
 
 - Audio/OLED/button pins are traced from the vendor diagram; verify them on hardware.
 - Motor direction/PWM may need swapping/adjusting; the L298N is driven at 20 kHz, 10-bit.
-- The vendor's full MCP action-sequence tools are not replicated; basic `self.motor.*` and `self.car.act` are implemented.
+- The S3 2.1.0 motor tool names are implemented (`move_forward`, `move_backward`, `spin_around`, `turn_left`, `turn_right`, `quick_forward`, `quick_backward`, `wiggle`, `dance`, `stop`). The newer C3 2.2.x `self.motor.sequence` / `self.car.act` sequence layer is not in the S3 dump and is not replicated.
+- Fall detection and the vendor's `self.rgb_led.*` tools are not implemented.
 - The upstream firmware does not implement the vendor's `espdeviceverifyservice.ytqhz.com` license check. The `id` partition is preserved but not read; use the vendor firmware/backup for the original activation flow.
 - `idf.py flash` preserves the `id` partition; do not use `erase-flash` or a merged image at `0x0` without the backup.
 

@@ -261,6 +261,59 @@ private:
                                return true;
                            });
 
+        auto add_move_tool = [this, &mcp_server](const char* name, const char* description,
+                                                 int default_speed, int min_speed, int max_speed,
+                                                 int default_duration_ms, bool reverse, bool spin) {
+            mcp_server.AddTool(
+                name, description,
+                PropertyList({
+                    Property("speed_percent", kPropertyTypeInteger, default_speed, min_speed,
+                             max_speed),
+                    Property("duration_ms", kPropertyTypeInteger, default_duration_ms, 0, 15000),
+                }),
+                [this, reverse, spin](const PropertyList& properties) -> ReturnValue {
+                    int speed = properties["speed_percent"].value<int>();
+                    int duration_ms = properties["duration_ms"].value<int>();
+                    if (spin) {
+                        Move(reverse ? speed : -speed, reverse ? -speed : speed, duration_ms);
+                    } else if (reverse) {
+                        Move(-speed, -speed, duration_ms);
+                    } else {
+                        Move(speed, speed, duration_ms);
+                    }
+                    return true;
+                });
+        };
+
+        add_move_tool("self.motor.move_forward",
+                      "Move the robot forward at the given speed for the specified duration. "
+                      "Fall detection is not available on this board.",
+                      100, 0, 100, 5000, false, false);
+        add_move_tool("self.motor.move_backward",
+                      "Move the robot backward at the given speed for the specified duration.", 100,
+                      0, 100, 5000, true, false);
+        add_move_tool("self.motor.spin_around",
+                      "Spin the robot around at the given speed for the specified duration.", 100,
+                      0, 100, 1000, false, true);
+        add_move_tool("self.motor.quick_forward",
+                      "Quick forward movement. Speed 60-100; fall detection is not available on "
+                      "this board.",
+                      100, 60, 100, 1000, false, false);
+        add_move_tool("self.motor.quick_backward", "Quick backward movement. Speed 0-100.", 100, 0,
+                      100, 1000, true, false);
+        add_move_tool("self.motor.wiggle", "Quick wiggle/turn movement.", 100, 0, 100, 300, false,
+                      true);
+
+        mcp_server.AddTool("self.motor.dance", "Perform a quick dance movement (forward briefly).",
+                           PropertyList({
+                               Property("speed_percent", kPropertyTypeInteger, 100, 0, 100),
+                           }),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               int speed = properties["speed_percent"].value<int>();
+                               Move(speed, speed, 800);
+                               return true;
+                           });
+
         mcp_server.AddTool(
             "self.motor.forward",
             "Drive forward. speed: 0-100; duration_ms: 0 = continuous, >0 = auto-stop.",
@@ -289,33 +342,31 @@ private:
                 return true;
             });
 
-        mcp_server.AddTool(
-            "self.motor.turn_left",
-            "Spin left in place. speed: 0-100; duration_ms: 0 = continuous, >0 = auto-stop.",
-            PropertyList({
-                Property("speed", kPropertyTypeInteger, 100, 0, 100),
-                Property("duration_ms", kPropertyTypeInteger, 1000, 0, 15000),
-            }),
-            [this](const PropertyList& properties) -> ReturnValue {
-                int speed = properties["speed"].value<int>();
-                int duration_ms = properties["duration_ms"].value<int>();
-                Move(-speed, speed, duration_ms);
-                return true;
-            });
+        mcp_server.AddTool("self.motor.turn_left",
+                           "Turn left in place. speed_percent: 0-100; duration_ms default 600.",
+                           PropertyList({
+                               Property("speed_percent", kPropertyTypeInteger, 100, 0, 100),
+                               Property("duration_ms", kPropertyTypeInteger, 600, 0, 15000),
+                           }),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               int speed = properties["speed_percent"].value<int>();
+                               int duration_ms = properties["duration_ms"].value<int>();
+                               Move(-speed, speed, duration_ms);
+                               return true;
+                           });
 
-        mcp_server.AddTool(
-            "self.motor.turn_right",
-            "Spin right in place. speed: 0-100; duration_ms: 0 = continuous, >0 = auto-stop.",
-            PropertyList({
-                Property("speed", kPropertyTypeInteger, 100, 0, 100),
-                Property("duration_ms", kPropertyTypeInteger, 1000, 0, 15000),
-            }),
-            [this](const PropertyList& properties) -> ReturnValue {
-                int speed = properties["speed"].value<int>();
-                int duration_ms = properties["duration_ms"].value<int>();
-                Move(speed, -speed, duration_ms);
-                return true;
-            });
+        mcp_server.AddTool("self.motor.turn_right",
+                           "Turn right in place. speed_percent: 0-100; duration_ms default 600.",
+                           PropertyList({
+                               Property("speed_percent", kPropertyTypeInteger, 100, 0, 100),
+                               Property("duration_ms", kPropertyTypeInteger, 600, 0, 15000),
+                           }),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               int speed = properties["speed_percent"].value<int>();
+                               int duration_ms = properties["duration_ms"].value<int>();
+                               Move(speed, -speed, duration_ms);
+                               return true;
+                           });
 
         mcp_server.AddTool(
             "self.car.act",
