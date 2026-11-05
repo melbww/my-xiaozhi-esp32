@@ -109,6 +109,12 @@ Follow-up from testing:
 - `McpServer::DoToolCall` now logs `Call tool: <name>` so voice-triggered tool
   calls can be verified from the serial console.
 
+The vendor firmware also serves a LAN web UI on port 80 (joystick, actions, LED
+G-code effects, config, help, music). Its pages and HTTP contract were captured
+and documented in `my_exploration/vendor-web-ui-api-notes.md`; the web UI is
+**not** implemented in the current custom firmware. The vendor music backend
+requires a vendor token (its API returns `403` without one).
+
 ## Quick reference
 
 | Item | Value |
@@ -623,6 +629,8 @@ uvx --from esptool esptool --chip esp32s3 \
 
 - `my_exploration/reverse-engineering-vendor-firmware.md` — how the vendor
   binary was disassembled and how the real pin map was recovered
+- `my_exploration/vendor-web-ui-api-notes.md` — vendor web pages, HTTP API,
+  LED G-code contract, action names, and music service notes
 - `partitions/v2/16m.csv` — 16 MB partition layout used by many S3 boards here
 - `sdkconfig.defaults` — OTA rollback setting
 - `docs/custom-board.md` — board/variant build chain
