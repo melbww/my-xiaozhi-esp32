@@ -136,4 +136,5 @@ need the original activation flow.
   output is still driven for compatibility.
 - Motors do not turn below roughly 60 % duty with the L298N on this rail, so
   non-zero speed commands are mapped into 60-100 % duty.
-- No LiDAR, VL53L0X, or camera is configured for this unit.
+- No LiDAR/VL53L0X or built-in camera. External USB UVC camera support is
+  compiled but disabled; see `my_exploration/camera-and-vision.md`.

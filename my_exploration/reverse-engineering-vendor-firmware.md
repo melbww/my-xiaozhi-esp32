@@ -470,6 +470,8 @@ grep -nE "\(0x3c1eb44c\)" my_exploration/vendor_app/irom.asm
 
 ## 16. See also
 
+- `my_exploration/camera-and-vision.md` — USB UVC camera, firmware support,
+  vision upload path, and server configuration
 - `my_exploration/vendor-web-ui-api-notes.md` — vendor web pages, HTTP APIs,
   LED G-code syntax, action names, and music-service findings
 - `my_exploration/qebabe-xiaoche-project-context.md` — the full bring-up log

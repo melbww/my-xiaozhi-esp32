@@ -115,6 +115,24 @@ and documented in `my_exploration/vendor-web-ui-api-notes.md`; the web UI is
 **not** implemented in the current custom firmware. The vendor music backend
 requires a vendor token (its API returns `403` without one).
 
+### 2026-11-06 camera / vision
+
+- Identified an external **4-pin USB 2.0 UVC camera module** (1 MP,
+  1280×720 / 480×320, YUV/MJPEG, 5 V) with a Type-C male cable.
+- Added UVC support: `CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y`,
+  `EspVideo` initialization, and `GetCamera()`. The MCP server then registers
+  `self.camera.take_photo` automatically.
+- `InitializeCamera()` is currently **commented out** because no camera
+  enumerates yet and `esp_video` delays boot by ~10 s. Current boot has 30 MCP
+  tools and no camera tool.
+- The camera also does not enumerate on the Mac. Likely cause: the Type-C male
+  plug lacks 5.1 kΩ CC pull-downs, or the cable is charge-only/miswired. Use a
+  USB-C female→USB-A male adapter plus a powered USB hub.
+- Vision can use the existing official xiaozhi server or the local
+  `xiaozhi-esp32-server` (VLLM + `server.vision_explain`). The local server is
+  not configured/running yet.
+- Full details: `my_exploration/camera-and-vision.md`.
+
 ## Quick reference
 
 | Item | Value |
@@ -243,7 +261,8 @@ The `id` partition contains the ASCII device ID `RUK5IES0L128X`, padded with
 
 The first diagram (`IMG_2133.JPG`) included LiDAR/VL53L0X and was **not
 accurate** for this unit. The accurate diagram shows no LiDAR, no VL53L0X, and
-no camera.
+no built-in camera. An external USB UVC camera is supported by the board code
+but is currently disabled; see `my_exploration/camera-and-vision.md`.
 
 ## Accurate hardware / pin map
 
@@ -260,7 +279,7 @@ From the accurate diagram + BOM:
 | MAX98357 amp | `DIN=GPIO7`, `BCLK=GPIO15`, `LRC=GPIO16`, `SD=3V3/5V`, `GAIN=GND`, `VIN=5V`, `GND=GND` |
 | Speaker | 2415 8 Ω 1 W cavity speaker on the amp `+`/`-` |
 | Power | 1S battery -> protection -> 3-pin switch -> 5V boost -> ESP32 5V and L298N |
-| Sensors | No LiDAR, no VL53L0X, no camera on this unit |
+| Sensors | No LiDAR/VL53L0X; no built-in camera (external USB UVC support present but disabled) |
 
 Caveats:
 
@@ -631,6 +650,8 @@ uvx --from esptool esptool --chip esp32s3 \
   binary was disassembled and how the real pin map was recovered
 - `my_exploration/vendor-web-ui-api-notes.md` — vendor web pages, HTTP API,
   LED G-code contract, action names, and music service notes
+- `my_exploration/camera-and-vision.md` — USB UVC camera, firmware support,
+  vision upload path, and server configuration
 - `partitions/v2/16m.csv` — 16 MB partition layout used by many S3 boards here
 - `sdkconfig.defaults` — OTA rollback setting
 - `docs/custom-board.md` — board/variant build chain
