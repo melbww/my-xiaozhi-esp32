@@ -20,3 +20,6 @@ mmap_generate_*.h
 .clangd
 backups/read.log
 my_exploration/ESP32-S3 CAM开发板资料.rar
+
+# Large reverse-engineering artifacts (regenerable; see my_exploration/reverse-engineering-vendor-firmware.md)
+my_exploration/vendor_app/

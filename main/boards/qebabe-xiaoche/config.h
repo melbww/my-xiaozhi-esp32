@@ -16,8 +16,10 @@
 #define AUDIO_I2S_SPK_GPIO_BCLK GPIO_NUM_15
 #define AUDIO_I2S_SPK_GPIO_LRCK GPIO_NUM_16
 
-// On-board WS2812 status LED.
-#define BUILTIN_LED_GPIO GPIO_NUM_48
+// On-board WS2812 status strip (7 LEDs). Verified against the vendor firmware,
+// which initializes it as "WS2812 RGB LED (GPIO38) ... 7 LEDs".
+#define BUILTIN_LED_GPIO GPIO_NUM_38
+#define BUILTIN_LED_COUNT 7
 
 #define BOOT_BUTTON_GPIO GPIO_NUM_0
 #define VOLUME_UP_BUTTON_GPIO GPIO_NUM_40
@@ -41,13 +43,18 @@
 #define DISPLAY_MIRROR_X true
 #define DISPLAY_MIRROR_Y true
 
-// External 3 V LED/lamp. The vendor BOM says the positive lead goes to pin 8.
-#define LAMP_GPIO GPIO_NUM_8
+// External 3 V LED/lamp. Verified against the vendor firmware's
+// LampController construction: gpio 18 (the BOM's "pin 8" is wrong for this
+// hardware revision).
+#define LAMP_GPIO GPIO_NUM_18
 
-// L298N dual H-bridge. The vendor diagram says GPIO11-14 map to IN1-IN4.
-#define MOTOR_IN1_GPIO GPIO_NUM_11
-#define MOTOR_IN2_GPIO GPIO_NUM_12
-#define MOTOR_IN3_GPIO GPIO_NUM_13
-#define MOTOR_IN4_GPIO GPIO_NUM_14
+// L298N dual H-bridge. Verified against the vendor firmware's InitMotorPwm,
+// which configures LEDC channels 0-3 on GPIO 12, 13, 14 and 21 (IN1-IN4).
+// The vendor's forward command drives channels 0+2 (IN1+IN3), backward drives
+// 1+3 (IN2+IN4), which matches the channel mapping in compact_wifi_board.cc.
+#define MOTOR_IN1_GPIO GPIO_NUM_12
+#define MOTOR_IN2_GPIO GPIO_NUM_13
+#define MOTOR_IN3_GPIO GPIO_NUM_14
+#define MOTOR_IN4_GPIO GPIO_NUM_21
 
 #endif  // _BOARD_CONFIG_H_

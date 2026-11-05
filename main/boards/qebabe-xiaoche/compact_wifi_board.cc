@@ -5,7 +5,7 @@
 #include "config.h"
 #include "display/oled_display.h"
 #include "lamp_controller.h"
-#include "led/single_led.h"
+#include "led/circular_strip.h"
 #include "mcp_server.h"
 #include "system_reset.h"
 #include "wifi_board.h"
@@ -418,7 +418,7 @@ public:
     }
 
     virtual Led* GetLed() override {
-        static SingleLed led(BUILTIN_LED_GPIO);
+        static CircularStrip led(BUILTIN_LED_GPIO, BUILTIN_LED_COUNT);
         return &led;
     }
 

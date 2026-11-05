@@ -56,6 +56,46 @@ robot while keeping a full-flash rollback. Priorities:
 - Remaining: visually confirm the OLED, test motors/LED, adjust direction/PWM
   if needed, and optionally verify the backup with `verify-flash`.
 
+## 2026-11-05 pin corrections (reverse-engineered from vendor 2.1.0)
+
+The robot was restored from the full backup, and the vendor application image
+was extracted from the dump and disassembled (`my_exploration/vendor_app/`).
+Static analysis of `InitMotorPwm`, `LampController`, and the direction handler
+produced the real pin map for this hardware revision:
+
+| Signal | Old (wrong) | Verified from vendor binary |
+|---|---|---|
+| L298N `IN1`..`IN4` | GPIO 11, 12, 13, 14 | **GPIO 12, 13, 14, 21** |
+| LED/lamp | GPIO 8 | **GPIO 18** |
+| WS2812 strip | GPIO 48, 1 LED | **GPIO 38, 7 LEDs** |
+
+Why the reconstructed board behaved erratically:
+
+- GPIO21 (real `IN4`) was never driven, so the right motor's second input
+  floated. Its direction depended on noise/charge, which is why the robot
+  sometimes moved, sometimes did not, and why one side occasionally reversed.
+- Driving GPIO 11-14 shifted every L298N input by one: the firmware thought it
+  was setting `IN1/IN2/IN3/IN4`, but the hardware saw `IN2/IN3/IN4/floating`.
+  "Forward" therefore drove the left motor backward and left the right side
+  indeterminate; "backward" drove the left motor forward.
+- The lamp was driven on GPIO8, which is not connected to the lamp on this unit,
+  so `self.lamp.*` never worked.
+- The status LED was driven on GPIO48 instead of the 7-LED WS2812 strip on
+  GPIO38.
+
+Vendor direction/channel mapping (LEDC channel 0-3 = GPIO 12, 13, 14, 21):
+
+| Motion | Channels |
+|---|---|
+| forward | 0 + 2 |
+| backward | 1 + 3 |
+| right turn / spin | 0 + 3 |
+| left turn | 1 + 2 |
+
+The vendor uses 20 kHz LEDC PWM, 10-bit resolution, and a 50 ms ramp, which
+matches the board code's frequency and resolution. The status LED is now a
+`CircularStrip` of 7 LEDs on GPIO38; the lamp uses GPIO18.
+
 ## Quick reference
 
 | Item | Value |
@@ -192,8 +232,9 @@ From the accurate diagram + BOM:
 
 | Function | Pins / notes |
 |---|---|
-| Motors (L298N) | `IN1=GPIO11`, `IN2=GPIO12`, `IN3=GPIO13`, `IN4=GPIO14` — explicit in the diagram |
-| LED/lamp | `GPIO8` — BOM says “正极接到8号引脚” |
+| Motors (L298N) | `IN1=GPIO12`, `IN2=GPIO13`, `IN3=GPIO14`, `IN4=GPIO21` — verified from vendor firmware |
+| LED/lamp | `GPIO18` — verified from vendor `LampController` (BOM's GPIO8 is wrong for this revision) |
+| WS2812 status strip | `GPIO38`, 7 LEDs — verified from vendor boot log |
 | OLED SSD1306 | `SDA=GPIO41`, `SCL=GPIO42` — traced |
 | Buttons (optional) | `Volume+ = GPIO40`, `Volume- = GPIO39`, `Boot = GPIO0` — traced |
 | INMP441 mic | `WS=GPIO4`, `SCK=GPIO5`, `SD=GPIO6`, `L/R=GND`, `VDD=3V3`, `GND=GND` |

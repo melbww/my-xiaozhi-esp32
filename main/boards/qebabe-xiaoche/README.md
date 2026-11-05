@@ -17,7 +17,8 @@ BOM; the vendor's original `compact_wifi_board.cc` was not available.
 | Buttons | BOOT, Volume+, Volume- (optional panel) |
 | Motor driver | L298N, 4 inputs |
 | Motors | 2x N20 3 V 30 rpm gear motors |
-| LED/lamp | 3 V LED on GPIO8 |
+| LED/lamp | 3 V LED on GPIO18 |
+| Status LEDs | 7x WS2812 strip on GPIO38 |
 | Power | 1S battery + protection + 3-pin switch + 5 V boost |
 
 ## Pin map
@@ -35,16 +36,21 @@ BOM; the vendor's original `compact_wifi_board.cc` was not available.
 | Button `BOOT` | 0 |
 | Button `Volume+` | 40 |
 | Button `Volume-` | 39 |
-| L298N `IN1` | 11 |
-| L298N `IN2` | 12 |
-| L298N `IN3` | 13 |
-| L298N `IN4` | 14 |
-| LED/lamp | 8 |
-| On-board WS2812 | 48 |
+| L298N `IN1` | 12 |
+| L298N `IN2` | 13 |
+| L298N `IN3` | 14 |
+| L298N `IN4` | 21 |
+| LED/lamp | 18 |
+| WS2812 strip (7 LEDs) | 38 |
 
-The motor and LED pins are explicit in the vendor diagram/BOM. The audio,
-OLED, and button pins are traced from the diagram; verify them on hardware
-before assuming they are correct.
+These pins were verified by disassembling the working vendor `xiaozhi` 2.1.0
+application image (`InitMotorPwm` configures LEDC channels 0-3 on GPIO 12, 13,
+14, 21; `LampController` is constructed with GPIO 18) and by the vendor boot
+log (`WS2812 RGB LED (GPIO38) ... 7 LEDs`). The vendor diagram/BOM's
+`IN1=GPIO11`, `LED=GPIO8` mapping does not match this hardware revision.
+
+The vendor firmware uses 20 kHz LEDC PWM at 10-bit resolution with a 50 ms
+ramp; the board code uses the same frequency and resolution.
 
 The firmware drives only the L298N `IN1`–`IN4` inputs, matching the vendor
 firmware. On a stock L298N module the `ENA`/`ENB` jumper caps connect the
@@ -125,6 +131,6 @@ need the original activation flow.
   ESP-IDF 6.x. Expect minor API/behavior differences.
 - The OLED orientation (`DISPLAY_MIRROR_X/Y`) may need adjusting for the
   actual enclosure.
-- The 3 V LED on GPIO8 must not be driven beyond its rating; use a resistor or
-  a proper driver.
+- The 3 V LED/lamp on GPIO18 must not be driven beyond its rating; use a
+  resistor or a proper driver.
 - No LiDAR, VL53L0X, or camera is configured for this unit.
