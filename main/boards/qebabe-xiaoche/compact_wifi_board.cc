@@ -4,6 +4,7 @@
 #include "codecs/no_audio_codec.h"
 #include "config.h"
 #include "display/oled_display.h"
+#include "esp_video.h"
 #include "led/circular_strip.h"
 #include "mcp_server.h"
 #include "system_reset.h"
@@ -60,6 +61,7 @@ private:
     Button volume_up_button_;
     Button volume_down_button_;
     esp_timer_handle_t motor_stop_timer_ = nullptr;
+    EspVideo* camera_ = nullptr;
     bool lamp_on_ = false;
 
     static constexpr int kPwmResolutionBits = 10;
@@ -503,6 +505,31 @@ private:
                            });
     }
 
+    void InitializeCamera() {
+#ifdef CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE
+        esp_video_init_usb_uvc_config_t usb_uvc_config = {
+            .uvc =
+                {
+                    .uvc_dev_num = 1,
+                    .task_stack = 4096,
+                    .task_priority = 5,
+                    .task_affinity = -1,
+                },
+            .usb =
+                {
+                    .init_usb_host_lib = true,
+                    .task_stack = 4096,
+                    .task_priority = 5,
+                    .task_affinity = -1,
+                },
+        };
+        esp_video_init_config_t video_config = {};
+        video_config.usb_uvc = &usb_uvc_config;
+        camera_ = new EspVideo(video_config);
+        ESP_LOGI(TAG, "USB UVC camera initialized");
+#endif
+    }
+
     void InitializeTools() {
         InitializeLampGpio();
         InitializeLampTools();
@@ -520,10 +547,16 @@ public:
         InitializeDisplayI2c();
         InitializeSsd1306Display();
         InitializeButtons();
+        // Camera temporarily disabled: USB UVC enumeration blocks boot for up
+        // to 10 seconds when no camera is attached. Re-enable this call once
+        // the camera enumerates reliably.
+        // InitializeCamera();
         InitializeTools();
     }
 
     virtual Led* GetLed() override { return &GetStatusLed(); }
+
+    virtual Camera* GetCamera() override { return camera_; }
 
     virtual AudioCodec* GetAudioCodec() override {
         static NoAudioCodecSimplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
