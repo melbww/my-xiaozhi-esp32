@@ -621,6 +621,8 @@ uvx --from esptool esptool --chip esp32s3 \
 
 ## References
 
+- `my_exploration/reverse-engineering-vendor-firmware.md` — how the vendor
+  binary was disassembled and how the real pin map was recovered
 - `partitions/v2/16m.csv` — 16 MB partition layout used by many S3 boards here
 - `sdkconfig.defaults` — OTA rollback setting
 - `docs/custom-board.md` — board/variant build chain
