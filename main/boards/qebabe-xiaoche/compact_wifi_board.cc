@@ -4,7 +4,6 @@
 #include "codecs/no_audio_codec.h"
 #include "config.h"
 #include "display/oled_display.h"
-#include "lamp_controller.h"
 #include "led/circular_strip.h"
 #include "mcp_server.h"
 #include "system_reset.h"
@@ -23,6 +22,34 @@
 
 #define TAG "QebabeXiaocheBoard"
 
+// The vendor firmware exposes a lamp on GPIO18, but this hardware revision has
+// no separate lamp: the 7-LED WS2812 strip is the only light. Wrap the strip so
+// the lamp and RGB tools can override the normal status colors.
+class QebabeStatusLed : public Led {
+public:
+    QebabeStatusLed(gpio_num_t gpio, uint16_t max_leds) : strip_(gpio, max_leds) {}
+
+    void OnStateChanged() override {
+        if (!override_active_) {
+            strip_.OnStateChanged();
+        }
+    }
+
+    void SetSolidColor(uint8_t red, uint8_t green, uint8_t blue) {
+        override_active_ = true;
+        strip_.SetAllColor(StripColor{red, green, blue});
+    }
+
+    void RestoreDefault() {
+        override_active_ = false;
+        strip_.OnStateChanged();
+    }
+
+private:
+    CircularStrip strip_;
+    bool override_active_ = false;
+};
+
 class QebabeXiaocheBoard : public WifiBoard {
 private:
     i2c_master_bus_handle_t display_i2c_bus_ = nullptr;
@@ -33,6 +60,7 @@ private:
     Button volume_up_button_;
     Button volume_down_button_;
     esp_timer_handle_t motor_stop_timer_ = nullptr;
+    bool lamp_on_ = false;
 
     static constexpr int kPwmResolutionBits = 10;
     static constexpr int kPwmMaxDuty = (1 << kPwmResolutionBits) - 1;
@@ -176,7 +204,11 @@ private:
     }
 
     static void SetMotorDuty(ledc_channel_t channel, int percent) {
-        uint32_t duty = static_cast<uint32_t>(std::abs(percent) * kPwmMaxDuty / 100);
+        int magnitude = std::abs(percent);
+        if (magnitude > 0) {
+            magnitude = MOTOR_MIN_DRIVE_PERCENT + magnitude * (100 - MOTOR_MIN_DRIVE_PERCENT) / 100;
+        }
+        uint32_t duty = static_cast<uint32_t>(magnitude * kPwmMaxDuty / 100);
         ESP_ERROR_CHECK(ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, duty));
         ESP_ERROR_CHECK(ledc_update_duty(LEDC_LOW_SPEED_MODE, channel));
     }
@@ -398,8 +430,82 @@ private:
             });
     }
 
+    QebabeStatusLed& GetStatusLed() {
+        static QebabeStatusLed led(BUILTIN_LED_GPIO, BUILTIN_LED_COUNT);
+        return led;
+    }
+
+    void InitializeLampGpio() {
+        gpio_config_t config = {};
+        config.pin_bit_mask = 1ULL << LAMP_GPIO;
+        config.mode = GPIO_MODE_OUTPUT;
+        config.pull_up_en = GPIO_PULLUP_DISABLE;
+        config.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        config.intr_type = GPIO_INTR_DISABLE;
+        ESP_ERROR_CHECK(gpio_config(&config));
+        ESP_ERROR_CHECK(gpio_set_level(LAMP_GPIO, 0));
+    }
+
+    void InitializeLampTools() {
+        auto& mcp_server = McpServer::GetInstance();
+
+        mcp_server.AddTool("self.lamp.get_state",
+                           "Get the power state of the lamp (the 7-LED WS2812 strip).",
+                           PropertyList(), [this](const PropertyList&) -> ReturnValue {
+                               return lamp_on_ ? "{\"power\": true}" : "{\"power\": false}";
+                           });
+
+        mcp_server.AddTool("self.lamp.turn_on", "Turn on the lamp: all 7 WS2812 LEDs solid white.",
+                           PropertyList(), [this](const PropertyList&) -> ReturnValue {
+                               lamp_on_ = true;
+                               gpio_set_level(LAMP_GPIO, 1);
+                               GetStatusLed().SetSolidColor(160, 160, 160);
+                               return true;
+                           });
+
+        mcp_server.AddTool("self.lamp.turn_off", "Turn off the lamp/7-LED strip.", PropertyList(),
+                           [this](const PropertyList&) -> ReturnValue {
+                               lamp_on_ = false;
+                               gpio_set_level(LAMP_GPIO, 0);
+                               GetStatusLed().SetSolidColor(0, 0, 0);
+                               return true;
+                           });
+
+        mcp_server.AddTool("self.rgb_led.set_color",
+                           "Set the 7-LED strip to a solid color. r, g and b are 0-255.",
+                           PropertyList({
+                               Property("r", kPropertyTypeInteger, 255, 0, 255),
+                               Property("g", kPropertyTypeInteger, 255, 0, 255),
+                               Property("b", kPropertyTypeInteger, 255, 0, 255),
+                           }),
+                           [this](const PropertyList& properties) -> ReturnValue {
+                               int red = properties["r"].value<int>();
+                               int green = properties["g"].value<int>();
+                               int blue = properties["b"].value<int>();
+                               lamp_on_ = (red | green | blue) != 0;
+                               GetStatusLed().SetSolidColor(red, green, blue);
+                               return true;
+                           });
+
+        mcp_server.AddTool("self.rgb_led.turn_off", "Turn off the 7-LED strip.", PropertyList(),
+                           [this](const PropertyList&) -> ReturnValue {
+                               lamp_on_ = false;
+                               GetStatusLed().SetSolidColor(0, 0, 0);
+                               return true;
+                           });
+
+        mcp_server.AddTool("self.rgb_led.restore_default_idle",
+                           "Restore the normal status colors on the 7-LED strip.", PropertyList(),
+                           [this](const PropertyList&) -> ReturnValue {
+                               lamp_on_ = false;
+                               GetStatusLed().RestoreDefault();
+                               return true;
+                           });
+    }
+
     void InitializeTools() {
-        static LampController lamp(LAMP_GPIO);
+        InitializeLampGpio();
+        InitializeLampTools();
         InitializeMotorTools();
     }
 
@@ -417,10 +523,7 @@ public:
         InitializeTools();
     }
 
-    virtual Led* GetLed() override {
-        static CircularStrip led(BUILTIN_LED_GPIO, BUILTIN_LED_COUNT);
-        return &led;
-    }
+    virtual Led* GetLed() override { return &GetStatusLed(); }
 
     virtual AudioCodec* GetAudioCodec() override {
         static NoAudioCodecSimplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,

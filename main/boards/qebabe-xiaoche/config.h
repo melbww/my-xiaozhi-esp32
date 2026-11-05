@@ -43,9 +43,9 @@
 #define DISPLAY_MIRROR_X true
 #define DISPLAY_MIRROR_Y true
 
-// External 3 V LED/lamp. Verified against the vendor firmware's
-// LampController construction: gpio 18 (the BOM's "pin 8" is wrong for this
-// hardware revision).
+// Vendor lamp output (GPIO18). This hardware revision has no separate lamp:
+// the 7-LED WS2812 strip is the only light. GPIO18 is still driven for
+// compatibility with the vendor firmware.
 #define LAMP_GPIO GPIO_NUM_18
 
 // L298N dual H-bridge. Verified against the vendor firmware's InitMotorPwm,
@@ -56,5 +56,10 @@
 #define MOTOR_IN2_GPIO GPIO_NUM_13
 #define MOTOR_IN3_GPIO GPIO_NUM_14
 #define MOTOR_IN4_GPIO GPIO_NUM_21
+
+// The N20 motors do not overcome static friction below roughly 60 % duty on
+// this 5 V/L298N rail. Map every non-zero speed command into
+// [MOTOR_MIN_DRIVE_PERCENT, 100] so low speeds still move the car.
+#define MOTOR_MIN_DRIVE_PERCENT 60
 
 #endif  // _BOARD_CONFIG_H_

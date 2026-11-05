@@ -17,7 +17,7 @@ BOM; the vendor's original `compact_wifi_board.cc` was not available.
 | Buttons | BOOT, Volume+, Volume- (optional panel) |
 | Motor driver | L298N, 4 inputs |
 | Motors | 2x N20 3 V 30 rpm gear motors |
-| LED/lamp | 3 V LED on GPIO18 |
+| Lamp | No separate lamp; the 7-LED WS2812 strip is the only light |
 | Status LEDs | 7x WS2812 strip on GPIO38 |
 | Power | 1S battery + protection + 3-pin switch + 5 V boost |
 
@@ -40,7 +40,7 @@ BOM; the vendor's original `compact_wifi_board.cc` was not available.
 | L298N `IN2` | 13 |
 | L298N `IN3` | 14 |
 | L298N `IN4` | 21 |
-| LED/lamp | 18 |
+| Lamp output (vendor firmware, not populated) | 18 |
 | WS2812 strip (7 LEDs) | 38 |
 
 These pins were verified by disassembling the working vendor `xiaozhi` 2.1.0
@@ -131,6 +131,9 @@ need the original activation flow.
   ESP-IDF 6.x. Expect minor API/behavior differences.
 - The OLED orientation (`DISPLAY_MIRROR_X/Y`) may need adjusting for the
   actual enclosure.
-- The 3 V LED/lamp on GPIO18 must not be driven beyond its rating; use a
-  resistor or a proper driver.
+- There is no separate lamp on this unit. The `self.lamp.*` and
+  `self.rgb_led.*` tools drive the 7-LED WS2812 strip; the vendor's GPIO18 lamp
+  output is still driven for compatibility.
+- Motors do not turn below roughly 60 % duty with the L298N on this rail, so
+  non-zero speed commands are mapped into 60-100 % duty.
 - No LiDAR, VL53L0X, or camera is configured for this unit.

@@ -93,8 +93,21 @@ Vendor direction/channel mapping (LEDC channel 0-3 = GPIO 12, 13, 14, 21):
 | left turn | 1 + 2 |
 
 The vendor uses 20 kHz LEDC PWM, 10-bit resolution, and a 50 ms ramp, which
-matches the board code's frequency and resolution. The status LED is now a
-`CircularStrip` of 7 LEDs on GPIO38; the lamp uses GPIO18.
+matches the board code's frequency and resolution. The status LEDs are a
+`CircularStrip` of 7 LEDs on GPIO38.
+
+Follow-up from testing:
+
+- This hardware revision has **no separate lamp**. The vendor firmware exposes
+  `self.lamp.*` on GPIO18, but that output is not populated; the 7-LED strip is
+  the only light. The board now maps `self.lamp.*` and the added
+  `self.rgb_led.*` tools onto the strip (with an override that suspends the
+  normal status colors) and still drives GPIO18 for compatibility.
+- The N20 motors do not overcome static friction below roughly 60 % duty on
+  this 5 V/L298N rail. Every non-zero speed command is mapped into 60-100 %
+  duty (`MOTOR_MIN_DRIVE_PERCENT`) so low speeds move the car.
+- `McpServer::DoToolCall` now logs `Call tool: <name>` so voice-triggered tool
+  calls can be verified from the serial console.
 
 ## Quick reference
 
@@ -233,7 +246,7 @@ From the accurate diagram + BOM:
 | Function | Pins / notes |
 |---|---|
 | Motors (L298N) | `IN1=GPIO12`, `IN2=GPIO13`, `IN3=GPIO14`, `IN4=GPIO21` — verified from vendor firmware |
-| LED/lamp | `GPIO18` — verified from vendor `LampController` (BOM's GPIO8 is wrong for this revision) |
+| LED/lamp | `GPIO18` vendor lamp output (not populated on this unit); 7-LED strip is the only light |
 | WS2812 status strip | `GPIO38`, 7 LEDs — verified from vendor boot log |
 | OLED SSD1306 | `SDA=GPIO41`, `SCL=GPIO42` — traced |
 | Buttons (optional) | `Volume+ = GPIO40`, `Volume- = GPIO39`, `Boot = GPIO0` — traced |
