@@ -175,13 +175,25 @@ The robot now runs against the local `xiaozhi-esp32-server` full-module stack at
   `ws://192.168.1.6:8000/xiaozhi/v1/`. Both are in `sys_params` and the
   `sys:params` Redis cache.
 - Device: MAC `1C:29:04:3E:CE:50` is bound to agent
-  `f20677aea16a49b3a2d93ef3461bbcf5` ("汪汪队长") under the `admin` account.
-  It appears in the 智控台 device list; activation was completed through
-  `POST /xiaozhi/device/bind/{agentId}/{code}`.
+  `f20677aea16a49b3a2d93ef3461bbcf5` (currently "湾湾小何") under the `admin`
+  account. It appears in the 智控台 device list; activation was completed
+  through `POST /xiaozhi/device/bind/{agentId}/{code}`.
+- TTS: the agent currently uses `TTS_CustomTTS` with `TTS_CustomTTS0000`
+  ("本地Say-台湾", macOS `say -v Meijia`), a free local fallback started with
+  `my_explorations/digital-human/iac/local-say-tts.sh start`. Edge TTS
+  (`TTS_EdgeTTS0001`, `zh-CN-XiaoxiaoNeural`) remains available but is slower.
+  Tencent TTS failed because its `secret_id`/`secret_key` were empty.
+- Latency diagnosis: ASR ~1.1 s, LLM ~0.5–2 s, and Edge TTS 1–6 s per sentence
+  (occasionally >10 s between sentences), so TTS dominated the perceived delay.
+  Local `say` synthesizes in ~0.6–1.1 s per sentence; a simulated WebSocket
+  session reached first audio in ~2.6 s (including LLM) and the next sentence
+  ~0.7 s later. The server runs `CustomTTS` against
+  `http://host.docker.internal:8880/tts`; the local service must be running.
 - Verified boot: Wi-Fi (`ziroom904`, `192.168.1.13`) → OTA from
   `192.168.1.6:8002` → WebSocket to `192.168.1.6:8000` → wake word `Hi,ESP`
-  → DeepSeek LLM reply → EdgeTTS playback. Server log shows the WebSocket
-  handshake, `agent-models` fetch, MCP tool list, and the spoken response.
+  → DeepSeek LLM reply → TTS playback (Edge TTS, later local `say`). Server
+  log shows the WebSocket handshake, `agent-models` fetch, MCP tool list, and
+  the spoken response.
 - Known non-blocking issues: the server logs a device output-rate warning
   (`16000` server vs `24000` codec; firmware resamples), and the `get_weather`
   plugin returns HTTP 401 with the saved key.
