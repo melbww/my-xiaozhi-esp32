@@ -291,9 +291,14 @@ server:
 - Pointing the robot at the local server also requires changing its
   OTA/WebSocket server address, not just starting the server.
 
-Current local state (2026-11-06): `data/.config.yaml` is missing, port 8003 is
-not listening, and the vision endpoint is unreachable. The robot still uses the
-official server (`api.tenclass.net`).
+Current local state (2026-11-08): the full stack is running from
+`/Users/wenwu/work/xiaozhi-esp32-server` and the robot now uses it for OTA and
+WebSocket (`ws://192.168.1.6:8000/xiaozhi/v1/`). The effective server config is
+`my_explorations/digital-human/deploy/data/.config.yaml`; its
+`vision_explain` is `http://192.168.1.6:8003/mcp/vision/explain`. Vision still
+cannot answer because `VLLM_ChatGLMVLLM` holds a placeholder API key, and the
+USB camera is not powered (see the USB host finding below). A restart of
+`xiaozhi-esp32-server` is required after changing `vision_explain`.
 
 ## USB host test with esp-iot-solution (2026-11-08)
 

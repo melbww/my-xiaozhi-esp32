@@ -51,7 +51,10 @@ robot while keeping a full-flash rollback. Priorities:
 - Custom board definition added at `main/boards/qebabe-xiaoche/`.
 - Built with ESP-IDF 6.1; app version `2.5.3`.
 - Flashed over the CH343 UART port; boot log confirms display, audio, Wi-Fi,
-  MQTT activation, wake word, and a spoken reply.
+  wake word, and a spoken reply.
+- Since 2026-11-08 the robot uses the self-hosted server over WebSocket
+  (`ws://192.168.1.6:8000/xiaozhi/v1/`); local OTA + LLM + TTS round-trip is
+  verified.
 - NVS and the vendor `id` partition were preserved.
 - Remaining: visually confirm the OLED, test motors/LED, adjust direction/PWM
   if needed, and optionally verify the backup with `verify-flash`.
@@ -148,6 +151,45 @@ requires a vendor token (its API returns `403` without one).
 - Flipping the Type-C plug 180° made no difference. Details and build recipe in
   `my_exploration/camera-and-vision.md`.
 
+### 2026-11-08 self-hosted server connected
+
+The robot now runs against the local `xiaozhi-esp32-server` full-module stack at
+`/Users/wenwu/work/xiaozhi-esp32-server` instead of `api.tenclass.net`.
+
+- Firmware: `main/boards/qebabe-xiaoche/config.json` now sets
+  `CONFIG_OTA_URL="http://192.168.1.6:8002/xiaozhi/ota/"`. Rebuilt and flashed
+  the individual images (bootloader, partition table, `otadata`, app, assets);
+  NVS and the `id` partition were preserved.
+- Server stack: started with
+  `my_explorations/digital-human/iac/docker-stack.sh up` (the script now falls
+  back to local images when the ghcr mirror is unreachable).
+  `manager-api` (智控台 `:8002`), `xiaozhi-server` (`:8000`/`:8003`), MySQL,
+  and Redis are running.
+- OTA parameters: `server.ota` is
+  `http://192.168.1.6:8002/xiaozhi/ota/`; `server.websocket` is
+  `ws://192.168.1.6:8000/xiaozhi/v1/`. Both are in `sys_params` and the
+  `sys:params` Redis cache.
+- Device: MAC `1C:29:04:3E:CE:50` is bound to agent
+  `f20677aea16a49b3a2d93ef3461bbcf5` ("汪汪队长") under the `admin` account.
+  It appears in the 智控台 device list; activation was completed through
+  `POST /xiaozhi/device/bind/{agentId}/{code}`.
+- Verified boot: Wi-Fi (`ziroom904`, `192.168.1.13`) → OTA from
+  `192.168.1.6:8002` → WebSocket to `192.168.1.6:8000` → wake word `Hi,ESP`
+  → DeepSeek LLM reply → EdgeTTS playback. Server log shows the WebSocket
+  handshake, `agent-models` fetch, MCP tool list, and the spoken response.
+- Known non-blocking issues: the server logs a device output-rate warning
+  (`16000` server vs `24000` codec; firmware resamples), and the `get_weather`
+  plugin returns HTTP 401 with the saved key.
+- Vision is still not usable: `VLLM_ChatGLMVLLM` has a placeholder API key,
+  and the USB camera has no VBUS. The `vision_explain` URL is documented as
+  `http://192.168.1.6:8003/mcp/vision/explain`; a server restart is needed
+  after changing it.
+
+To reconnect after a server restart, just say `Hi, ESP`; the robot re-runs OTA
+and opens a new WebSocket. If the Mac's LAN IP changes, update
+`CONFIG_OTA_URL` in `config.json`, `server.ota`, and `server.websocket`, then
+rebuild/reflash and restart the stack.
+
 ## Quick reference
 
 | Item | Value |
@@ -162,6 +204,9 @@ requires a vendor token (its API returns `403` without one).
 | Board hardware | ESP32-S3-WROOM-1 N16R8, Freenove-compatible header layout |
 | Vendor firmware | XiaoZhi `2.1.0`, ESP-IDF `v5.5.2-dirty` |
 | Custom firmware | Repo `2.5.3`, ESP-IDF `6.1.0` |
+| OTA server | `http://192.168.1.6:8002/xiaozhi/ota/` (self-hosted manager-api) |
+| WebSocket server | `ws://192.168.1.6:8000/xiaozhi/v1/` |
+| Server stack | `/Users/wenwu/work/xiaozhi-esp32-server` (full module, Docker) |
 | Backup | `backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin` |
 | Backup SHA-256 | `f09041302f1949795d666766e4b2bea9c664314eb06bff8881303a856ee0019a` |
 | Device ID | `RUK5IES0L128X` in the `id` partition |

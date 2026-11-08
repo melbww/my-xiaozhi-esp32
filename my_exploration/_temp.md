@@ -100,3 +100,9 @@ OTA 文件
 显示 1-5 条，共 5 条
 OPEN OTA · ESP8266 / ESP32 固件服务
 开源硬件，持续交付
+
+--
+
+connect it to self hosted at /Users/wenwu/work/xiaozhi-esp32-server/
+
+

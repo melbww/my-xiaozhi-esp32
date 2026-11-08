@@ -59,6 +59,27 @@ jumpers are already installed and no change is needed. If the motors do not
 move after reflashing, check that the `ENA`/`ENB` jumpers are still in place
 (or that both pins are tied high).
 
+## Self-hosted server
+
+This variant points the firmware at the local `xiaozhi-esp32-server` stack:
+
+```text
+CONFIG_OTA_URL="http://192.168.1.6:8002/xiaozhi/ota/"
+```
+
+The OTA endpoint is served by manager-api on port `8002` (full-module
+deployment). The robot gets `ws://192.168.1.6:8000/xiaozhi/v1/` from the
+`server.websocket` parameter in the 智控台. If the server host or LAN IP
+changes, update both the `CONFIG_OTA_URL` value in `config.json` and the
+console parameters, then rebuild and reflash.
+
+Start the stack from `/Users/wenwu/work/xiaozhi-esp32-server`:
+
+```sh
+my_explorations/digital-human/iac/docker-stack.sh up
+my_explorations/digital-human/iac/docker-stack.sh status
+```
+
 ## Build
 
 ```sh
