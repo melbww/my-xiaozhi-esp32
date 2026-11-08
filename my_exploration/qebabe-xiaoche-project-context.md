@@ -165,11 +165,15 @@ The robot now runs against the local `xiaozhi-esp32-server` full-module stack at
   back to local images when the ghcr mirror is unreachable).
   `manager-api` (智控台 `:8002`), `xiaozhi-server` (`:8000`/`:8003`), MySQL,
   and Redis are running.
-- Live logs: `http://192.168.1.6:8006/logs.html` (the digital-human runtime on
-  `:8006`; it streams `docker logs -f xiaozhi-esp32-server` plus runtime logs).
-  Start it with `my_explorations/digital-human/iac/start.sh --background`;
-  stop with `.../stop.sh`. Raw logs: `main/digital-human/digital-human.log`
-  and `my_explorations/digital-human/deploy/logs/server.log`.
+- Logs: the `digital-human` runtime on `:8006` is **not part of the robot
+  path** and is currently stopped. For robot logs use
+  `docker logs -f xiaozhi-esp32-server` or
+  `my_explorations/digital-human/deploy/logs/server.log`. The `:8006` Live
+  Logs page is only for the optional browser/digital-human test; start it with
+  `my_explorations/digital-human/iac/start.sh --background` and stop it with
+  `.../stop.sh`. Its Mac wake-word listener is disabled
+  (`wakeword_runtime/config.json` -> `wakeword.enabled=false`) so the Mac
+  microphone stays off; the robot uses its own INMP441.
 - OTA parameters: `server.ota` is
   `http://192.168.1.6:8002/xiaozhi/ota/`; `server.websocket` is
   `ws://192.168.1.6:8000/xiaozhi/v1/`. Both are in `sys_params` and the
@@ -180,7 +184,7 @@ The robot now runs against the local `xiaozhi-esp32-server` full-module stack at
   through `POST /xiaozhi/device/bind/{agentId}/{code}`.
 - TTS: the agent currently uses `TTS_CustomTTS` with `TTS_CustomTTS0000`
   ("本地Say-台湾", macOS `say -v Meijia`), a free local fallback started with
-  `my_explorations/digital-human/iac/local-say-tts.sh start`. Edge TTS
+  `my_explorations/local-say-tts/local-say-tts.sh start`. Edge TTS
   (`TTS_EdgeTTS0001`, `zh-CN-XiaoxiaoNeural`) remains available but is slower.
   Tencent TTS failed because its `secret_id`/`secret_key` were empty.
 - Latency diagnosis: ASR ~1.1 s, LLM ~0.5–2 s, and Edge TTS 1–6 s per sentence
