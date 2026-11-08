@@ -165,6 +165,11 @@ The robot now runs against the local `xiaozhi-esp32-server` full-module stack at
   back to local images when the ghcr mirror is unreachable).
   `manager-api` (智控台 `:8002`), `xiaozhi-server` (`:8000`/`:8003`), MySQL,
   and Redis are running.
+- Live logs: `http://192.168.1.6:8006/logs.html` (the digital-human runtime on
+  `:8006`; it streams `docker logs -f xiaozhi-esp32-server` plus runtime logs).
+  Start it with `my_explorations/digital-human/iac/start.sh --background`;
+  stop with `.../stop.sh`. Raw logs: `main/digital-human/digital-human.log`
+  and `my_explorations/digital-human/deploy/logs/server.log`.
 - OTA parameters: `server.ota` is
   `http://192.168.1.6:8002/xiaozhi/ota/`; `server.websocket` is
   `ws://192.168.1.6:8000/xiaozhi/v1/`. Both are in `sys_params` and the
