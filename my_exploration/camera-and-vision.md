@@ -4,21 +4,35 @@ All camera/vision findings for the Qebabe robot: the camera module, USB
 wiring/power, firmware UVC support, the vision upload path, and the server-side
 options.
 
-## Current status (2026-11-06)
+## Current status (2026-11-08)
 
 - The camera is a **4-pin USB 2.0 UVC module** (1 MP, 1280×720 / 480×320,
   YUV/MJPEG, 5 V) with a 4-wire cable ending in a **Type-C male** plug.
-- Firmware UVC support was added (`CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE`,
+- Firmware UVC support is present (`CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE`,
   `EspVideo`, `GetCamera()`), but **camera initialization is currently commented
   out** in `compact_wifi_board.cc`.
 - Reason: with no enumerating camera, `esp_video` blocks boot for ~10 s waiting
   for the UVC device, then fails to open `/dev/video40`.
 - Current firmware boots normally (no camera wait), registers 30 MCP tools, and
   does **not** expose `self.camera.take_photo`.
-- The camera also does **not enumerate on the Mac** yet. The likely cause is the
-  Type-C male plug missing 5.1 kΩ CC pull-down resistors, or a charge-only /
-  miswired cable. A USB-C female→USB-A male adapter plus a powered USB-A hub is
-  the recommended workaround.
+- **The camera does not enumerate on the board either**, so this is not an
+  ESP-IDF/UVC-driver problem. Tested 2026-11-08 with Espressif's
+  `usb_camera_mic_spk` USB-host demo: the USB bus reports **zero devices**
+  (`USB bus: no devices enumerated`), with no UVC/UAC connect event.
+- The board's **USB/OTG port itself is fine**: with a Mac USB-C cable in that
+  port it enumerates as `USB JTAG_serial debug unit` (`0x303a:0x1001`,
+  `/dev/cu.usbmodem101`) and the secondary USB-Serial/JTAG console works.
+  So D+/D−, the receptacle and the cable are good.
+- Therefore the OTG port is **not supplying VBUS to the camera**. The board
+  follows the ESP32-S3-DevKitC-1-style design where each USB-C port's VBUS goes
+  through a Schottky diode *into* the 5 V rail; it can power the board but it
+  cannot power a USB device when the board is powered from the 5 V pin.
+- Flipping the Type-C plug 180° made no difference (rules out a one-sided
+  D+/D− wiring in the plug for the "no power" case, but the plug can still be
+  a charge-only/miswired cable).
+- The camera **needs external 5 V**. Either a powered USB-A hub with
+  C-female→A-male adapters, or a 4-pin pigtail wired to the board's 5 V/GND
+  header pins plus D+→GPIO20 / D−→GPIO19.
 - The local `xiaozhi-esp32-server` vision backend is **not running/configured**
   yet. The Mac's LAN IP is `192.168.1.6`; the robot is `192.168.1.13`.
 
@@ -281,6 +295,99 @@ Current local state (2026-11-06): `data/.config.yaml` is missing, port 8003 is
 not listening, and the vision endpoint is unreachable. The robot still uses the
 official server (`api.tenclass.net`).
 
+## USB host test with esp-iot-solution (2026-11-08)
+
+Espressif's USB AV demo was used to test the camera independently of the
+XiaoZhi firmware:
+
+```
+https://github.com/espressif/esp-iot-solution/tree/master/examples/usb/host/usb_camera_mic_spk
+```
+
+It is a USB host demo with a browser console (SoftAP `USB-AV-DEMO-<MAC>`,
+`http://192.168.4.1`) that detects UVC cameras (and UAC mics/speakers) and
+previews MJPEG. Unlike `esp_video`, it does not block boot when nothing is
+plugged in.
+
+### Build recipe (ESP-IDF 6.1, board-safe)
+
+```sh
+git clone --depth 1 https://github.com/espressif/esp-iot-solution.git ~/esp-iot-solution
+cd ~/esp-iot-solution/examples/usb/host/usb_camera_mic_spk
+```
+
+Create `sdkconfig.board.qebabe`:
+
+```
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=n
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+```
+
+```sh
+source ~/esp/esp-idf/export.sh
+idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.board.qebabe" set-target esp32s3
+idf.py build
+idf.py -p /dev/cu.usbmodem5D300345091 flash
+```
+
+**Do not enable `CONFIG_ESP32_S3_USB_OTG`** (Example Configuration → board
+choice). That option compiles board init code that drives GPIO12/13/17/18; on
+this robot GPIO12/13 are the L298N `IN1`/`IN2` motor inputs and GPIO18 is the
+lamp. Keep the default `BOARD_GENERIC`.
+
+### Diagnostic patch
+
+`app_usb_host.c` was changed to poll the bus so "no device" is explicit:
+
+```c
+ret = usb_host_lib_handle_events(pdMS_TO_TICKS(500), &event_flags);
+if (ret != ESP_OK && ret != ESP_ERR_TIMEOUT) { ... }
+
+uint8_t addr_list[8] = {0};
+int num_devices = 0;
+if (usb_host_device_addr_list_fill(sizeof(addr_list), addr_list, &num_devices) == ESP_OK &&
+        num_devices != last_num_devices) {
+    last_num_devices = num_devices;
+    if (num_devices == 0) {
+        ESP_LOGW(TAG, "USB bus: no devices enumerated");
+    } else {
+        for (int i = 0; i < num_devices; i++) {
+            ESP_LOGW(TAG, "USB bus: device %d at address %d", i + 1, addr_list[i]);
+        }
+    }
+}
+```
+
+### Observed result
+
+With the camera in the USB/OTG port (either plug orientation):
+
+```
+I (932) app_usb_host: USB Host installed
+I (932) app_uvc: UVC host installed
+I (932) uac-host: Install Succeed, Version: 1.5.0
+I (933) app_uac: UAC host installed
+I (1083) app_wifi: SoftAP started, SSID:USB-AV-DEMO-3ECE51 URL:http://192.168.4.1
+W (1432) app_usb_host: USB bus: no devices enumerated
+```
+
+No `Handling UVC connect`, no `Pick UVC MJPEG`, no enumeration error — the host
+controller never sees a D+ pull-up, i.e. the camera is unpowered.
+
+Control experiment: same firmware, Mac USB-C cable in the USB/OTG port →
+macOS shows `USB JTAG_serial debug unit` and `/dev/cu.usbmodem101`, so the port
+and its data lines are healthy.
+
+### Serial capture helper
+
+`my_exploration/tools/serial_capture.py <port> <seconds>` pulses DTR/RTS to
+reset the board (CH343 circuit) and prints the boot log; useful because
+`idf.py monitor` is interactive.
+
 ## Formats and resolution
 
 The camera supports **YUV/MJPEG** at **1280×720 / 480×320**.
@@ -308,7 +415,9 @@ explicit `VIDIOC_S_FMT` preference in the board code yet.
 
 - [ ] Camera on the **USB / OTG** port, not `UART / COM`.
 - [ ] Camera connected **before** boot/reset.
-- [ ] Camera LED/power present.
+- [x] Board's USB/OTG port works (`USB JTAG_serial debug unit` on the Mac).
+- [ ] Camera has 5 V — the OTG port does **not** supply VBUS
+      (tested indirectly: zero devices on the bus). Power it externally.
 - [ ] USB-C female→USB-A male adapter + **powered** hub.
 - [ ] Known-good data cable; verify the 4-pin wire order.
 - [ ] Mac sees it:
@@ -326,6 +435,7 @@ explicit `VIDIOC_S_FMT` preference in the board code yet.
 | `main/boards/qebabe-xiaoche/config.json` | UVC Kconfig flags |
 | `main/boards/qebabe-xiaoche/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` (init currently commented) |
 | `my_exploration/cam/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
+| `my_exploration/tools/serial_capture.py` | Reset + capture CH343 serial output |
 | `my_exploration/qebabe-xiaoche-project-context.md` | Main bring-up log |
 | `my_exploration/reverse-engineering-vendor-firmware.md` | Binary analysis / pin recovery |
 
@@ -333,12 +443,20 @@ Commit `feffbfb` contains the camera changes and the product screenshots.
 
 ## Next steps
 
-1. Verify the camera enumerates through a USB-A/powered hub (Mac first).
-2. Re-enable `InitializeCamera()`, rebuild/flash, and confirm `self.camera.take_photo`.
-3. Decide on the vision backend:
+1. **Give the camera 5 V.** The USB/OTG port cannot power it.
+   - Cheapest: USB-A **powered** hub + `USB-C female → USB-A male` adapter for
+     the camera, plus `USB-A female → USB-C male` adapter into the board's
+     USB/OTG port (this also feeds VBUS into the board, which is fine).
+   - Alternative: 4-pin pigtail from the camera connector to the board header:
+     `5V → 5V`, `GND → GND`, `D+ → GPIO20`, `D− → GPIO19`. Verify the module
+     wire order (red 5 V, black GND, green D+, white D−) before applying power.
+2. Re-run the `usb_camera_mic_spk` demo to confirm enumeration and see a live
+   MJPEG preview at `http://192.168.4.1` over the `USB-AV-DEMO-*` SoftAP.
+3. Re-enable `InitializeCamera()`, rebuild/flash, and confirm `self.camera.take_photo`.
+4. Decide on the vision backend:
    - official server (already configured), or
    - local `xiaozhi-esp32-server` with a VLLM + `server.vision_explain`.
-4. Test: “what do you see?” and check `Call tool: self.camera.take_photo` plus the
+5. Test: “what do you see?” and check `Call tool: self.camera.take_photo` plus the
    `EspVideo` upload log.
-5. If the camera only exposes MJPEG or 1280×720 is too heavy, add MJPEG support or
+6. If the camera only exposes MJPEG or 1280×720 is too heavy, add MJPEG support or
    force a lower resolution.

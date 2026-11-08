@@ -133,6 +133,21 @@ requires a vendor token (its API returns `403` without one).
   not configured/running yet.
 - Full details: `my_exploration/camera-and-vision.md`.
 
+### 2026-11-08 camera / USB power finding
+
+- Tested the camera with Espressif's `usb/host/usb_camera_mic_spk` USB-host
+  demo (esp-iot-solution) on ESP-IDF 6.1: the USB host sees **zero devices**
+  (`USB bus: no devices enumerated`), no UVC/UAC connect event.
+- The board's **USB/OTG port is healthy**: with the Mac cable in it the board
+  enumerates as `USB JTAG_serial debug unit` (`0x303a:0x1001`,
+  `/dev/cu.usbmodem101`) and the secondary USB-Serial/JTAG console works.
+- Root cause: the USB/OTG port does **not supply VBUS** (DevKitC-style diode
+  into the 5 V rail, input-only). The camera needs external 5 V — a powered
+  USB-A hub with C/A adapters, or a 4-pin pigtail to the board's 5 V/GND and
+  D+→GPIO20 / D−→GPIO19.
+- Flipping the Type-C plug 180° made no difference. Details and build recipe in
+  `my_exploration/camera-and-vision.md`.
+
 ## Quick reference
 
 | Item | Value |
