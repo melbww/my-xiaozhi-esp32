@@ -1,7 +1,7 @@
 # Qebabe Xiaoche — Hardware
 
 **Last verified:** 2026-11-08
-**Full history:** [../history/2026-11-bringup-log.md](../history/2026-11-bringup-log.md)
+**Full history:** [../.archive/history/2026-11-bringup-log.md](../.archive/history/2026-11-bringup-log.md)
 
 The board is a vendor robot car, not an upstream devkit. The custom board
 definition lives at `main/boards/qebabe-xiaoche/`.
@@ -104,7 +104,7 @@ The `id` partition contains ASCII `RUK5IES0L128X`, padded with `0xFF`.
 
 The vendor diagram/BOM’s `IN1=GPIO11`, `LED=GPIO8` mapping does **not** match
 this hardware revision. The real map was recovered by disassembling the vendor
-2.1.0 application; see [../vendor/reverse-engineering.md](../vendor/reverse-engineering.md).
+2.1.0 application; see [../.archive/vendor/reverse-engineering.md](../.archive/vendor/reverse-engineering.md).
 
 | Function | Pins / notes |
 |---|---|

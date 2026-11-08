@@ -117,7 +117,7 @@ Not implemented:
 
 - C3 2.2.x `self.motor.sequence` / advanced `self.car.act` action sequences
   (not present in the S3 2.1.0 dump). Vendor C3 release notes are in
-  [../vendor/c3-2.2-release-notes.md](../vendor/c3-2.2-release-notes.md).
+  [../.archive/vendor/c3-2.2-release-notes.md](../.archive/vendor/c3-2.2-release-notes.md).
 - Fall detection for `move_forward` / `quick_forward` (no edge/distance sensor).
 - The vendor `self.rgb_led.*` names; this board exposes the WS2812 strip as
   `self.lamp.*` plus the added `self.rgb_led.*` tools.

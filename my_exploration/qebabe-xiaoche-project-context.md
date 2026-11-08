@@ -11,10 +11,9 @@ and maintainable. Start at the [exploration index](README.md).
 | Self-hosted server, OTA/WS, logs | [server/README.md](server/README.md) |
 | TTS, latency, barge-in | [server/tts.md](server/tts.md) |
 | Camera / vision | [camera/README.md](camera/README.md) |
-| Vendor files / reverse engineering | [vendor/README.md](vendor/README.md) |
-| Full dated bring-up log | [history/2026-11-bringup-log.md](history/2026-11-bringup-log.md) |
-| Background guides | [reference/README.md](reference/README.md) |
+| Vendor BOM / wiring / inventory | [vendor/README.md](vendor/README.md) |
+| Archived deep dives, history, research | [.archive/README.md](.archive/README.md) |
 
 The original 2026-11-04 → 2026-11-08 narrative is preserved in
-[history/2026-11-bringup-log.md](history/2026-11-bringup-log.md), with links and
-the verified pin table updated to the current layout.
+[.archive/history/2026-11-bringup-log.md](.archive/history/2026-11-bringup-log.md),
+with links and the verified pin table updated to the current layout.

@@ -1,9 +1,9 @@
 # Qebabe Xiaoche ESP32-S3 — Bring-Up Log (Historical)
 
 > **Historical log (2026-11-04 → 2026-11-08).** Current facts are in
-> [../README.md](../README.md), [../robot/hardware.md](../robot/hardware.md),
-> [../robot/firmware.md](../robot/firmware.md), [../server/README.md](../server/README.md),
-> and [../server/tts.md](../server/tts.md). This file preserves the dated
+> [../../README.md](../../README.md), [../../robot/hardware.md](../../robot/hardware.md),
+> [../../robot/firmware.md](../../robot/firmware.md), [../../server/README.md](../../server/README.md),
+> and [../../server/tts.md](../../server/tts.md). This file preserves the dated
 > narrative; it may mention superseded details (MQTT activation, old motor
 > pins, 27 MCP tools) that were later corrected.
 
@@ -18,8 +18,8 @@ first boot, and testing.
 ## How to use this log
 
 This is the **historical** bring-up narrative, not the current entry point.
-For current work start at [../README.md](../README.md); for build/flash use
-[../robot/firmware.md](../robot/firmware.md). The dated sections below explain
+For current work start at [../../README.md](../../README.md); for build/flash use
+[../../robot/firmware.md](../../robot/firmware.md). The dated sections below explain
 how the board and firmware reached their current state.
 
 ## Project goal
@@ -43,8 +43,8 @@ robot while keeping a full-flash rollback. Priorities:
   `.gitignore`.
 - Generated `build/` and `sdkconfig` are ignored by `.gitignore`.
 - Backup: `backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin` (gitignored `*.bin`).
-- Vendor files: `../vendor/from_vendor/`;
-  RAR at `../vendor/assets/ESP32-S3 CAM开发板资料.rar`.
+- Vendor files: `../../vendor/from_vendor/`;
+  RAR at `../vendor-assets/ESP32-S3 CAM开发板资料.rar`.
 
 ## Current status
 
@@ -64,7 +64,7 @@ robot while keeping a full-flash rollback. Priorities:
 ## 2026-11-05 pin corrections (reverse-engineered from vendor 2.1.0)
 
 The robot was restored from the full backup, and the vendor application image
-was extracted from the dump and disassembled (`../vendor/artifacts/`).
+was extracted from the dump and disassembled (`../vendor-artifacts/`).
 Static analysis of `InitMotorPwm`, `LampController`, and the direction handler
 produced the real pin map for this hardware revision:
 
@@ -136,7 +136,7 @@ requires a vendor token (its API returns `403` without one).
 - Vision can use the existing official xiaozhi server or the local
   `xiaozhi-esp32-server` (VLLM + `server.vision_explain`). The local server is
   not configured/running yet.
-- Full details: `../camera/README.md`.
+- Full details: `../../camera/README.md`.
 
 ### 2026-11-08 camera / USB power finding
 
@@ -151,7 +151,7 @@ requires a vendor token (its API returns `403` without one).
   USB-A hub with C/A adapters, or a 4-pin pigtail to the board's 5 V/GND and
   D+→GPIO20 / D−→GPIO19.
 - Flipping the Type-C plug 180° made no difference. Details and build recipe in
-  `../camera/README.md`.
+  `../../camera/README.md`.
 
 ### 2026-11-08 self-hosted server connected
 
@@ -396,15 +396,15 @@ The `id` partition contains the ASCII device ID `RUK5IES0L128X`, padded with
 
 | File | What it is |
 |---|---|
-| `../vendor/from_vendor/小智AI机器人配件清单.txt` | BOM: ESP32-S3 N16R8, L298N, INMP441, MAX98357, 0.96" OLED, 1S protection, 5V boost, 3-pin switch, 2415 speaker, 2x N20 motors, 2x 16340 cells |
-| `../vendor/from_vendor/小智AI版机器人接线图.jpg` | Accurate wiring diagram for this robot |
-| `../vendor/from_vendor/2.5ai_voice_display_oled_dog.ino.merged.bin` | 16 MB Arduino merged image for a different project (robot dog); partition table `nvs/app/spiffs/coredump`, IDF v5.4.1. **Not compatible with this OTA-partitioned S3 robot; do not flash.** |
-| `../vendor/assets/ESP32-S3 CAM开发板资料.rar` | Generic Freenove ESP32-S3 CAM board materials (tutorials, libraries, datasheets, pinout). Useful for board hardware, not the vendor’s qebabe source. |
+| `../../vendor/from_vendor/小智AI机器人配件清单.txt` | BOM: ESP32-S3 N16R8, L298N, INMP441, MAX98357, 0.96" OLED, 1S protection, 5V boost, 3-pin switch, 2415 speaker, 2x N20 motors, 2x 16340 cells |
+| `../../vendor/from_vendor/小智AI版机器人接线图.jpg` | Accurate wiring diagram for this robot |
+| `../vendor-assets/2.5ai_voice_display_oled_dog.ino.merged.bin` | 16 MB Arduino merged image for a different project (robot dog); partition table `nvs/app/spiffs/coredump`, IDF v5.4.1. **Not compatible with this OTA-partitioned S3 robot; do not flash.** |
+| `../vendor-assets/ESP32-S3 CAM开发板资料.rar` | Generic Freenove ESP32-S3 CAM board materials (tutorials, libraries, datasheets, pinout). Useful for board hardware, not the vendor’s qebabe source. |
 
 The first diagram (`IMG_2133.JPG`) included LiDAR/VL53L0X and was **not
 accurate** for this unit. The accurate diagram shows no LiDAR, no VL53L0X, and
 no built-in camera. An external USB UVC camera is supported by the board code
-but is currently disabled; see `../camera/README.md`.
+but is currently disabled; see `../../camera/README.md`.
 
 ## Accurate hardware / pin map
 
@@ -710,7 +710,7 @@ partition, and assets.
 
 ## Do not do
 
-- Do not flash `../vendor/from_vendor/2.5ai_voice_display_oled_dog.ino.merged.bin`;
+- Do not flash `../vendor-assets/2.5ai_voice_display_oled_dog.ino.merged.bin`;
   it is a different project/partition layout.
 - Do not flash `build/merged-binary.bin` at `0x0`; it can overwrite the `id`
   partition and NVS.
@@ -793,7 +793,7 @@ uvx --from esptool esptool --chip esp32s3 \
   binary was disassembled and how the real pin map was recovered
 - `../vendor/web-ui-api.md` — vendor web pages, HTTP API,
   LED G-code contract, action names, and music service notes
-- `../camera/README.md` — USB UVC camera, firmware support,
+- `../../camera/README.md` — USB UVC camera, firmware support,
   vision upload path, and server configuration
 - `partitions/v2/16m.csv` — 16 MB partition layout used by many S3 boards here
 - `sdkconfig.defaults` — OTA rollback setting

@@ -1,7 +1,7 @@
 # Background Research: ESP32 and XiaoZhi Cloud vs Self-Hosting
 
 > Background research, not current setup. Current robot facts are in
-> [../README.md](../README.md) and [../server/README.md](../server/README.md).
+> [../../README.md](../../README.md) and [../../server/README.md](../../server/README.md).
 
 Mental model of esp32
 

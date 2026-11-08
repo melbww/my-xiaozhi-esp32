@@ -52,16 +52,15 @@ See [server/README.md](server/README.md) and [server/tts.md](server/tts.md).
 | [server/README.md](server/README.md) | Self-hosted stack, OTA/WS, activation, logs |
 | [server/tts.md](server/tts.md) | TTS options, latency diagnosis, local `say`, barge-in |
 | [camera/README.md](camera/README.md) | USB UVC camera, firmware support, vision pipeline |
-| [vendor/README.md](vendor/README.md) | Vendor files, reverse engineering, web UI, C3 notes |
-| [history/2026-11-bringup-log.md](history/2026-11-bringup-log.md) | Full dated bring-up log (historical) |
-| [reference/README.md](reference/README.md) | Background guides and research notes |
+| [vendor/README.md](vendor/README.md) | Vendor BOM/wiring and inventory |
+| [.archive/README.md](.archive/README.md) | Archived deep dives, history, background research |
 | [MAINTENANCE.md](MAINTENANCE.md) | How to keep these docs accurate |
 
 ## Critical rules
 
 - **Do not** flash `build/merged-binary.bin` at `0x0`; it can overwrite the
   vendor `id` partition and NVS.
-- **Do not** flash `vendor/from_vendor/2.5ai_voice_display_oled_dog.ino.merged.bin`;
+- **Do not** flash `.archive/vendor-assets/2.5ai_voice_display_oled_dog.ino.merged.bin`;
   it is a different project/partition layout.
 - **Do not** run `idf.py erase-flash` unless you intend to erase NVS, the `id`
   partition, and assets.

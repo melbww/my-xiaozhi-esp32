@@ -19,7 +19,7 @@ main/mmap_generate_emoji.h
 mmap_generate_*.h
 .clangd
 backups/read.log
-my_exploration/vendor/assets/*.rar
+my_exploration/.archive/vendor-assets/*.rar
 
-# Large reverse-engineering artifacts (regenerable; see my_exploration/vendor/reverse-engineering.md)
-my_exploration/vendor/artifacts/irom.asm
+# Large reverse-engineering artifacts (regenerable; see my_exploration/.archive/vendor/reverse-engineering.md)
+my_exploration/.archive/vendor-artifacts/irom.asm

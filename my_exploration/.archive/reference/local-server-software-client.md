@@ -1,7 +1,7 @@
 # Testing XiaoZhi Without Hardware: Local Server + Software Client
 
 > Historical guide. The current robot/server setup is in
-> [../server/README.md](../server/README.md) and [../server/tts.md](../server/tts.md).
+> [../../server/README.md](../../server/README.md) and [../../server/tts.md](../../server/tts.md).
 > Keep this for the browser-client protocol notes, not as the current install
 > procedure.
 
