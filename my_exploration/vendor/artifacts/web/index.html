@@ -1,0 +1,786 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小智小车遥控器</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: rgba(15, 23, 42, 0.78);
+            --panel-border: rgba(148, 163, 184, 0.16);
+            --text: #e5eefb;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-2: #22c55e;
+            --danger: #fb7185;
+            --warning: #f59e0b;
+            --shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+        }
+
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.24), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.16), transparent 28%),
+                linear-gradient(160deg, #020617, #0f172a 45%, #111827);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text);
+        }
+
+        .container {
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+            text-align: center;
+            max-width: 460px;
+            width: 90%;
+        }
+
+        h1 {
+            color: var(--text);
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .nav-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .nav-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 9px 14px;
+            border-radius: 999px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 13px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        .joystick-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            margin: 0 auto 30px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.08);
+            border: 3px solid rgba(148, 163, 184, 0.18);
+            touch-action: none;
+            box-shadow: inset 0 0 40px rgba(15,23,42,0.45);
+        }
+
+        .joystick {
+            position: absolute;
+            width: 112px;
+            height: 112px;
+            background: linear-gradient(135deg, var(--accent-2), #16a34a);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+            transition: all 0.1s ease;
+            cursor: pointer;
+        }
+
+        .joystick.active {
+            background: linear-gradient(135deg, var(--accent), #0ea5e9);
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+
+        .direction-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--text);
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .direction-indicator.active {
+            opacity: 1;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        .status.connected {
+            background: rgba(34, 197, 94, 0.16);
+            border-color: rgba(34, 197, 94, 0.22);
+            color: #dcfce7;
+        }
+
+        .status.disconnected {
+            background: rgba(251, 113, 133, 0.14);
+            border-color: rgba(251, 113, 133, 0.22);
+            color: #ffe4e6;
+        }
+
+        .controls {
+            margin-top: 20px;
+        }
+
+        .music-entry {
+            display: block;
+            margin: 0 0 16px 0;
+            padding: 16px 18px;
+            border-radius: 18px;
+            text-decoration: none;
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            background: linear-gradient(135deg, var(--accent), #0072ff);
+            box-shadow: 0 10px 24px rgba(14, 165, 233, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .music-entry:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px rgba(14, 165, 233, 0.36);
+        }
+
+        .control-btn {
+            background: linear-gradient(135deg, var(--warning), #f97316);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 24px rgba(249, 115, 22, 0.25);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(249, 115, 22, 0.4);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .stop-btn {
+            background: linear-gradient(135deg, var(--danger), #e11d48);
+        }
+
+        .stop-btn:hover {
+            box-shadow: 0 6px 20px rgba(225, 29, 72, 0.4);
+        }
+
+        /* 动作控制区域样式 */
+        .actions-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.72);
+            border-radius: 18px;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .action-group {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+
+        .action-group h4 {
+            margin: 0 0 15px 0;
+            color: var(--text);
+            font-size: 1.1em;
+            text-align: center;
+            border-bottom: 2px solid rgba(148, 163, 184, 0.12);
+            padding-bottom: 8px;
+        }
+
+        .action-btn {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.92), rgba(14, 165, 233, 0.92));
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
+            min-width: 100px;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 18px rgba(14, 165, 233, 0.28);
+        }
+
+        .action-btn:active {
+            transform: translateY(0);
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .joystick-container {
+                width: 320px;
+                height: 320px;
+            }
+
+            .joystick {
+                width: 96px;
+                height: 96px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .action-buttons {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .action-btn {
+                font-size: 13px;
+                padding: 8px 12px;
+                min-width: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-row">
+            <a href="/music" class="nav-pill">音乐控制</a>
+            <a href="/config" class="nav-pill">配置中心</a>
+            <a href="/help" class="nav-pill">帮助</a>
+        </div>
+        <h1>🚗 小智小车遥控器</h1>
+        <div class="subtitle">触摸或拖拽摇杆控制小车移动</div>
+
+        <div class="joystick-container" id="joystick-container">
+            <div class="joystick" id="joystick"></div>
+            <div class="direction-indicator" id="direction-indicator">⏹️</div>
+        </div>
+
+        <div class="status connected" id="status">
+            <strong>状态:</strong> <span id="status-text">已连接</span>
+        </div>
+
+        <div class="controls">
+            <a href="/music" class="music-entry">🎵 打开音乐控制中心</a>
+            <button class="control-btn stop-btn" onclick="stopCar()">🛑 停止</button>
+            <a href="/config" class="control-btn" style="background: linear-gradient(135deg, #22c55e, #16a34a);">⚙️ 配置</a>
+        </div>
+
+        <div class="actions-section">
+            <h3 style="color: var(--text); margin: 20px 0 15px 0; text-align: center;">🎭 动作控制</h3>
+
+            <div class="action-buttons">
+                <!-- 基本移动动作 -->
+                <div class="action-group">
+                    <h4>🚗 基本移动</h4>
+                    <button class="action-btn" onclick="executeAction('move_forward')">⬆️ 前进</button>
+                    <button class="action-btn" onclick="executeAction('move_backward')">⬇️ 后退</button>
+                    <button class="action-btn" onclick="executeAction('turn_left')">⬅️ 左转</button>
+                    <button class="action-btn" onclick="executeAction('turn_right')">➡️ 右转</button>
+                    <button class="action-btn" onclick="executeAction('spin_around')">🔄 转圈</button>
+                </div>
+
+                <!-- 情感动作 -->
+                <div class="action-group">
+                    <h4>😊 情感表达</h4>
+                    <button class="action-btn" onclick="executeAction('wake_up')">🌅 唤醒</button>
+                    <button class="action-btn" onclick="executeAction('happy')">😄 开心</button>
+                    <button class="action-btn" onclick="executeAction('sad')">😢 悲伤</button>
+                    <button class="action-btn" onclick="executeAction('thinking')">🤔 思考</button>
+                    <button class="action-btn" onclick="executeAction('listening')">👂 倾听</button>
+                    <button class="action-btn" onclick="executeAction('speaking')">💬 说话</button>
+                    <button class="action-btn" onclick="executeAction('wiggle')">🌊 摆动</button>
+                    <button class="action-btn" onclick="executeAction('dance')">💃 跳舞</button>
+                </div>
+
+                <!-- 高级情感 -->
+                <div class="action-group">
+                    <h4>🎭 高级情感</h4>
+                    <button class="action-btn" onclick="executeAction('excited')">🤩 兴奋</button>
+                    <button class="action-btn" onclick="executeAction('loving')">😍 爱慕</button>
+                    <button class="action-btn" onclick="executeAction('angry')">😠 生气</button>
+                    <button class="action-btn" onclick="executeAction('surprised')">😲 惊讶</button>
+                    <button class="action-btn" onclick="executeAction('confused')">😕 困惑</button>
+                </div>
+
+                <!-- 灯光控制 -->
+                <div class="action-group">
+                    <h4>💡 灯光控制</h4>
+                    <button class="action-btn" onclick="controlLed('off')">⏹️ 关闭</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#29b6f6,#0288d1)" onclick="sendLightshowPreset('50,R')">🌈 彩虹</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#8e24aa,#6a1b9a)" onclick="sendLightshowPreset('50,P')">🌊 彩虹流水</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#ff7043,#f4511e)" onclick="sendLightshowPreset('50,C,255,0,0,0,255,0,0,0,255')">🎨 三色流水</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#66bb6a,#43a047)" onclick="sendLightshowPreset('50,W,0,255,255')">💨 呼吸</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#ffca28,#ffb300)" onclick="sendLightshowPreset('50,M,255,0,0,0,255,0')">✨ 三色闪烁</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#90a4ae,#607d8b)" onclick="sendLightshowPreset('50,F3,255,0,0')">⚡ 闪烁3次</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#29b6f6,#0288d1)" onclick="sendStartupPreset('0,0,0,255')">🔵 启动蓝</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#ef5350,#e53935)" onclick="sendStartupPreset('0,255,0,0')">🔴 启动红</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#ef5350,#e53935)" onclick="sendStartupPreset('0,0,255,0')">🟢 启动绿</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#42a5f5,#1e88e5)" onclick="sendLightshowPreset('60,S')">🏁 跑马灯</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#8d6e63,#6d4c41)" onclick="sendLightshowPreset('40,T')">☄️ 流星</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#4caf50,#2e7d32)" onclick="sendLightshowPreset('45,V')">🌊 波浪</button>
+                    <button class="action-btn" style="background:linear-gradient(135deg,#f06292,#c2185b)" onclick="sendLightshowPreset('30,L')">⚡ 闪电</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let joystick = document.getElementById('joystick');
+        let joystickContainer = document.getElementById('joystick-container');
+        let directionIndicator = document.getElementById('direction-indicator');
+        let statusText = document.getElementById('status-text');
+
+        let isDragging = false;
+        let centerX = 0;
+        let centerY = 0;
+        let currentDirection = 0;
+        let currentSpeed = 0;
+        let isRequestPending = false; // 防止并发请求
+
+
+        // 初始化摇杆中心位置
+        function initJoystick() {
+            const rect = joystickContainer.getBoundingClientRect();
+            centerX = rect.left + rect.width / 2;
+            centerY = rect.top + rect.height / 2;
+        }
+
+        // 更新摇杆位置
+        function updateJoystickPosition(x, y) {
+            const rect = joystickContainer.getBoundingClientRect();
+            const containerCenterX = rect.left + rect.width / 2;
+            const containerCenterY = rect.top + rect.height / 2;
+
+            // 计算相对于容器的位置
+            let relativeX = x - containerCenterX;
+            let relativeY = y - containerCenterY;
+
+            // 限制在圆形范围内
+            const maxRadius = rect.width / 2 - 56;
+            const distance = Math.sqrt(relativeX * relativeX + relativeY * relativeY);
+
+            if (distance > maxRadius) {
+                relativeX = (relativeX / distance) * maxRadius;
+                relativeY = (relativeY / distance) * maxRadius;
+            }
+
+            // 更新摇杆位置
+            joystick.style.left = `calc(50% + ${relativeX}px)`;
+            joystick.style.top = `calc(50% + ${relativeY}px)`;
+
+            // 计算方向和速度
+            const normalizedX = relativeX / maxRadius;
+            const normalizedY = relativeY / maxRadius;
+
+            // 计算方向角度 (0-360度)
+            let angle = Math.atan2(normalizedY, normalizedX) * (180 / Math.PI);
+            if (angle < 0) angle += 360;
+
+            // 计算速度 (0-100)
+            const speed = Math.min(distance / maxRadius, 1) * 100;
+
+            // 转换方向为整数值
+            let direction = 0; // 停止
+            if (speed > 5) { // 最小阈值 (降低阈值以响应点击)
+                if (angle >= 315 || angle < 45) {
+                    direction = 1; // 右
+                } else if (angle >= 45 && angle < 135) {
+                    direction = 2; // 下
+                } else if (angle >= 135 && angle < 225) {
+                    direction = 3; // 左
+                } else if (angle >= 225 && angle < 315) {
+                    direction = 4; // 上
+                }
+            }
+
+            return { direction, speed: Math.round(speed) };
+        }
+
+        // 更新方向指示器
+        function updateDirectionIndicator(direction, speed) {
+            let icon = '⏹️';
+            let text = '停止';
+
+            if (speed > 5) {
+                switch(direction) {
+                    case 1: icon = '➡️'; text = '右转'; break;
+                    case 2: icon = '⬇️'; text = '后退'; break;
+                    case 3: icon = '⬅️'; text = '左转'; break;
+                    case 4: icon = '⬆️'; text = '前进'; break;
+                }
+            }
+
+            directionIndicator.textContent = icon;
+            directionIndicator.classList.toggle('active', speed > 5);
+        }
+
+        // 发送控制命令
+        // 发送控制命令
+        async function sendControl(direction, speed) {
+            // 停止命令(0, 0)优先处理，不受并发限制
+            if (direction === 0 && speed === 0) {
+                currentDirection = 0;
+                currentSpeed = 0;
+                try {
+                    const response = await fetch('/api/control', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            direction: 0,
+                            speed: 0
+                        })
+                    });
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    statusText.textContent = '已连接';
+                    document.getElementById('status').className = 'status connected';
+                } catch (error) {
+                    console.error('Failed to send stop control:', error);
+                    statusText.textContent = '连接错误';
+                    document.getElementById('status').className = 'status error';
+                }
+                return;
+            }
+
+            if (direction === currentDirection && speed === currentSpeed) {
+                return; // 避免重复发送相同命令
+            }
+
+            // 如果有请求正在进行中，跳过
+            if (isRequestPending) {
+                return;
+            }
+
+            currentDirection = direction;
+            currentSpeed = speed;
+            isRequestPending = true;
+
+            try {
+                const response = await fetch('/api/control', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        direction: direction,
+                        speed: speed
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                statusText.textContent = '已连接';
+                document.getElementById('status').className = 'status connected';
+            } catch (error) {
+                console.error('Failed to send control:', error);
+                statusText.textContent = '连接错误';
+                document.getElementById('status').className = 'status error';
+            } finally {
+                isRequestPending = false;
+            }
+        }
+
+        // 停止小车
+        function stopCar() {
+            // 重置状态
+            isDragging = false;
+            currentDirection = 0;
+            currentSpeed = 0;
+
+            // 重置UI
+            joystick.style.left = '50%';
+            joystick.style.top = '50%';
+            joystick.classList.remove('active');
+            updateDirectionIndicator(0, 0);
+
+            // 发送停止命令
+            sendControl(0, 0);
+        }
+
+
+        // 执行电机动作
+        async function executeAction(action) {
+            try {
+                const response = await fetch('/api/motor/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: action
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                console.log('Action executed:', action, result);
+
+                // 更新状态显示
+                statusText.textContent = '动作执行成功';
+                document.getElementById('status').className = 'status connected';
+
+            } catch (error) {
+                console.error('Failed to execute action:', action, error);
+                statusText.textContent = '动作执行失败';
+                document.getElementById('status').className = 'status disconnected';
+            }
+        }
+
+        // 灯光控制函数
+        async function controlLed(mode) {
+            try {
+                let gcode = '';
+                const count = await fetchLedCount();
+                // helper to build a solid color: count, speed, r,g,b
+                const solid = (r,g,b) => `${count},0,${r},${g},${b}`;
+
+                switch(mode) {
+                    case 'off':
+                        gcode = '0,0,0';
+                        break;
+                    case 'red':
+                        gcode = solid(255,0,0);
+                        break;
+                    case 'green':
+                        gcode = solid(0,255,0);
+                        break;
+                    case 'blue':
+                        gcode = solid(0,0,255);
+                        break;
+                    case 'white':
+                        gcode = solid(255,255,255);
+                        break;
+                    case 'warm':
+                        gcode = solid(255,160,64);
+                        break;
+                    case 'rainbow':
+                        gcode = `${count},50,R`;
+                        break;
+                    case 'breath':
+                        // breath (W) may accept a color param; using default
+                        gcode = `${count},40,W`;
+                        break;
+                    case 'flash':
+                        // F<n> 表示闪烁 n 次，后面可跟颜色
+                        gcode = `${count},30,F5,255,255,255`;
+                        break;
+                    case 'chase':
+                        gcode = `${count},60,S`;
+                        break;
+                    case 'meteor':
+                        gcode = `${count},40,T`;
+                        break;
+                    case 'three_color':
+                        gcode = `${count},50,C,255,0,0,0,255,0,0,0,255`;
+                        break;
+                    case 'gradient':
+                        gcode = `${count},50,G,255,0,0,0,0,255`;
+                        break;
+                    default:
+                        console.warn('Unknown LED mode:', mode);
+                        return;
+                }
+
+                const response = await fetch('/api/led/control', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ gcode: gcode })
+                });
+
+                if (response && response.ok) {
+                    const result = await response.json();
+                    console.log('LED control:', mode, result);
+                    statusText.textContent = '灯光: ' + mode;
+                } else {
+                    console.error('LED control failed, response not ok');
+                    statusText.textContent = '灯光控制失败';
+                }
+            } catch (error) {
+                console.error('Failed to control LED:', error);
+                statusText.textContent = '灯光控制异常';
+            }
+        }
+
+        // 鼠标事件
+        joystickContainer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            joystick.classList.add('active');
+            initJoystick();
+            const { direction, speed } = updateJoystickPosition(e.clientX, e.clientY);
+            updateDirectionIndicator(direction, speed);
+            sendControl(direction, speed);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const { direction, speed } = updateJoystickPosition(e.clientX, e.clientY);
+                updateDirectionIndicator(direction, speed);
+                sendControl(direction, speed);
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                stopCar();
+            }
+        });
+
+        // 触摸事件
+        joystickContainer.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDragging = true;
+            joystick.classList.add('active');
+            initJoystick();
+            const touch = e.touches[0];
+            const { direction, speed } = updateJoystickPosition(touch.clientX, touch.clientY);
+            updateDirectionIndicator(direction, speed);
+            sendControl(direction, speed);
+        });
+
+        joystickContainer.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isDragging) {
+                const touch = e.touches[0];
+                const { direction, speed } = updateJoystickPosition(touch.clientX, touch.clientY);
+                updateDirectionIndicator(direction, speed);
+                sendControl(direction, speed);
+            }
+        });
+
+        joystickContainer.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (isDragging) {
+                stopCar();
+            }
+        });
+
+        // 全局触摸结束事件，确保在任何地方松手都能停止
+        document.addEventListener('touchend', (e) => {
+            if (isDragging && e.target !== joystick && e.target !== joystickContainer) {
+                stopCar();
+            }
+        });
+
+        // 定期发送控制命令（当摇杆被拖拽时）
+        setInterval(() => {
+            if (isDragging) {
+                sendControl(currentDirection, currentSpeed);
+            }
+        }, 200); // 每200ms发送一次，减少服务器压力
+
+        // 初始化
+        initJoystick();
+        window.addEventListener('resize', initJoystick);
+
+        // 远程页灯光控制辅助函数（确保遥控器页的预设按钮可用）
+        async function fetchLedCount() {
+            try {
+                const resp = await fetch('/api/led/config');
+                if (!resp.ok) return 7;
+                const j = await resp.json();
+                return parseInt(j.led_count) || 7;
+            } catch (e) {
+                console.error('fetchLedCount error', e);
+                return 7;
+            }
+        }
+
+        async function sendGcode(gcode) {
+            try {
+                const resp = await fetch('/api/led/control', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ gcode: gcode })
+                });
+                const res = await resp.json();
+                return res;
+            } catch (e) {
+                console.error('sendGcode error', e);
+                return null;
+            }
+        }
+
+        async function sendLightshowPreset(suffix) {
+            const count = await fetchLedCount();
+            const g = `${count},${suffix}`;
+            await sendGcode(g);
+        }
+
+        async function sendStartupPreset(suffix) {
+            const count = await fetchLedCount();
+            const g = `${count},${suffix}`;
+            await sendGcode(g);
+        }
+    </script>
+
+    <!-- 页脚 -->
+    <style>
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            font-size: 12px;
+            color: #fff;
+            border-top: 1px solid #eee;
+        }
+    </style>
+    <div class="footer">开发者：半岛铁盒子 抖音号：qebabe</div>
+</body>
+</html>

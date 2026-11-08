@@ -1,5 +1,9 @@
 # Vendor Web UI, HTTP API, and MCP Notes
 
+> Part of the [exploration index](../README.md). Reference only: the custom
+> firmware does **not** implement this web UI. Current robot/board facts are in
+> [../robot/hardware.md](../robot/hardware.md).
+
 Reference notes for the vendor `xiaozhi` 2.1.0 web interface and its API, captured
 while the vendor firmware was running. Use this if we later want to reimplement
 the web UI, add matching MCP tools, or recover the music/action behavior.
@@ -17,7 +21,7 @@ The device got `192.168.1.13` over DHCP. The pages were fetched from the live
 device and are saved (git-ignored) under:
 
 ```
-my_exploration/vendor_app/web/
+my_exploration/vendor/artifacts/web/
 ├── index.html    # 小智小车遥控器 (joystick, actions, LED, links)
 ├── config.html   # 配置中心 (motor timings + LED G-codes)
 ├── help.html     # G-code tutorial
@@ -451,8 +455,8 @@ That avoids duplicating motion/effect logic between the two front ends.
 
 ## See also
 
-- `my_exploration/reverse-engineering-vendor-firmware.md` — how the binary was
+- `my_exploration/vendor/reverse-engineering.md` — how the binary was
   disassembled and the hardware pin map was recovered
-- `my_exploration/qebabe-xiaoche-project-context.md` — bring-up log and current
+- `my_exploration/history/2026-11-bringup-log.md` — bring-up log and current
   firmware status
 - `main/boards/qebabe-xiaoche/README.md` — verified board pin map

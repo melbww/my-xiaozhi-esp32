@@ -1,5 +1,8 @@
 # The Opening Checklist
 
+> General architecture teaching note; unrelated to the Qebabe robot bring-up.
+> See [../README.md](../README.md) for the project index.
+
 *An architecture lesson in two passes: first a story, then the map.*
 
 ## The Parable

@@ -1,5 +1,9 @@
 # Reverse-Engineering the Vendor ESP32-S3 Firmware
 
+> Part of the [exploration index](../README.md). Current hardware/pin facts are
+> in [../robot/hardware.md](../robot/hardware.md); this page records how they
+> were recovered.
+
 How the working vendor `xiaozhi` 2.1.0 image from
 `backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin` was analyzed to recover the
 real hardware pin map. Written as a reusable recipe for future boards and
@@ -29,7 +33,7 @@ was shifted by one and the real `IN4` (GPIO21) floated, which produced the
 - Work from the full 16 MB dump, never from a merged image.
 - Verify the dump's SHA-256 before trusting it.
 - Keep the analysis output outside tracked source (e.g.
-  `my_exploration/vendor_app/`).
+  `my_exploration/vendor/artifacts/`).
 - Static analysis first. Live-device APIs are useful but can have side effects
   (see §11).
 - Record recovered facts in the board README immediately; the next agent will
@@ -41,9 +45,9 @@ The vendor partition table puts the active app at `ota_0`, offset `0x20000`,
 size `0x3f0000`:
 
 ```sh
-mkdir -p my_exploration/vendor_app
+mkdir -p my_exploration/vendor/artifacts
 dd if=backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin \
-   of=my_exploration/vendor_app/vendor_app.bin \
+   of=my_exploration/vendor/artifacts/vendor_app.bin \
    bs=1 skip=$((0x20000)) count=$((0x3f0000))
 ```
 
@@ -51,7 +55,7 @@ Check it:
 
 ```sh
 /Users/wenwu/.espressif/python_env/idf6.1_py3.14_env/bin/python3 -m esptool \
-  --chip esp32s3 image-info my_exploration/vendor_app/vendor_app.bin
+  --chip esp32s3 image-info my_exploration/vendor/artifacts/vendor_app.bin
 ```
 
 Output for this image:
@@ -144,7 +148,7 @@ def find_pointer(data, vma):
 ## 3. Strings are cheap anchors
 
 ```sh
-strings -a -t x my_exploration/vendor_app/vendor_app.bin \
+strings -a -t x my_exploration/vendor/artifacts/vendor_app.bin \
   > /tmp/vendor_strings.txt
 
 grep -iE "motor|ledc|lamp|gpio|ws2812" /tmp/vendor_strings.txt
@@ -196,13 +200,13 @@ function context to pick the right one.
 
 ```sh
 # IROM data starts at file 0x140020 (0x140018 + 8), length 0x1dd6f0
-dd if=my_exploration/vendor_app/vendor_app.bin \
-   of=my_exploration/vendor_app/irom.bin \
+dd if=my_exploration/vendor/artifacts/vendor_app.bin \
+   of=my_exploration/vendor/artifacts/irom.bin \
    bs=1 skip=$((0x140020)) count=$((0x1dd6f0))
 
 ~/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32s3-elf-objdump \
   -D -b binary -m xtensa --adjust-vma=0x42000020 \
-  my_exploration/vendor_app/irom.bin > my_exploration/vendor_app/irom.asm
+  my_exploration/vendor/artifacts/irom.bin > my_exploration/vendor/artifacts/irom.asm
 ```
 
 Do the same for DROM if you need to resolve string starts. For code, IROM and
@@ -211,7 +215,7 @@ the two IRAM segments are the important ones.
 Take a window when reading:
 
 ```sh
-sed -n '50020,50120p' my_exploration/vendor_app/irom.asm
+sed -n '50020,50120p' my_exploration/vendor/artifacts/irom.asm
 ```
 
 ## 6. Read Xtensa code (practical notes)
@@ -434,10 +438,10 @@ analysis unless you intend to make the hardware move.
 Artifacts (regenerable, large):
 
 ```
-my_exploration/vendor_app/vendor_app.bin   # app extracted from ota_0
-my_exploration/vendor_app/irom.bin         # IROM segment slice
-my_exploration/vendor_app/irom.asm         # full IROM disassembly
-my_exploration/vendor_app/web/             # vendor web UI snapshots
+my_exploration/vendor/artifacts/vendor_app.bin   # app extracted from ota_0
+my_exploration/vendor/artifacts/irom.bin         # IROM segment slice
+my_exploration/vendor/artifacts/irom.asm         # full IROM disassembly
+my_exploration/vendor/artifacts/web/             # vendor web UI snapshots
 ```
 
 Commands:
@@ -445,35 +449,35 @@ Commands:
 ```sh
 # Extract the app from the full dump
 dd if=backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin \
-   of=my_exploration/vendor_app/vendor_app.bin \
+   of=my_exploration/vendor/artifacts/vendor_app.bin \
    bs=1 skip=$((0x20000)) count=$((0x3f0000))
 
 # Segment table and addresses
 /Users/wenwu/.espressif/python_env/idf6.1_py3.14_env/bin/python3 -m esptool \
-  --chip esp32s3 image-info my_exploration/vendor_app/vendor_app.bin
+  --chip esp32s3 image-info my_exploration/vendor/artifacts/vendor_app.bin
 
 # String anchors
-strings -a -t x my_exploration/vendor_app/vendor_app.bin > /tmp/vendor_strings.txt
+strings -a -t x my_exploration/vendor/artifacts/vendor_app.bin > /tmp/vendor_strings.txt
 
 # IROM slice and disassembly
-dd if=my_exploration/vendor_app/vendor_app.bin \
-   of=my_exploration/vendor_app/irom.bin \
+dd if=my_exploration/vendor/artifacts/vendor_app.bin \
+   of=my_exploration/vendor/artifacts/irom.bin \
    bs=1 skip=$((0x140020)) count=$((0x1dd6f0))
 
 ~/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32s3-elf-objdump \
   -D -b binary -m xtensa --adjust-vma=0x42000020 \
-  my_exploration/vendor_app/irom.bin > my_exploration/vendor_app/irom.asm
+  my_exploration/vendor/artifacts/irom.bin > my_exploration/vendor/artifacts/irom.asm
 
 # Find code referencing a string by its VMA
-grep -nE "\(0x3c1eb44c\)" my_exploration/vendor_app/irom.asm
+grep -nE "\(0x3c1eb44c\)" my_exploration/vendor/artifacts/irom.asm
 ```
 
 ## 16. See also
 
-- `my_exploration/camera-and-vision.md` — USB UVC camera, firmware support,
+- `my_exploration/camera/README.md` — USB UVC camera, firmware support,
   vision upload path, and server configuration
-- `my_exploration/vendor-web-ui-api-notes.md` — vendor web pages, HTTP APIs,
+- `my_exploration/vendor/web-ui-api.md` — vendor web pages, HTTP APIs,
   LED G-code syntax, action names, and music-service findings
-- `my_exploration/qebabe-xiaoche-project-context.md` — the full bring-up log
+- `my_exploration/history/2026-11-bringup-log.md` — the full bring-up log
 - `main/boards/qebabe-xiaoche/README.md` — the verified board pin map
 - `docs/custom-board.md` — how board definitions are wired into the build

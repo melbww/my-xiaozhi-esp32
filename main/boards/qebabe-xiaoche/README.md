@@ -129,7 +129,8 @@ partition at `0x800000`:
 **Preserve the `id` partition.** It contains the vendor device ID used by the
 activation/license service. `idf.py flash` writes individual images and does
 not erase it. A merged image written at `0x0` may overwrite it; keep the full
-16 MB backup from `my_exploration/` and restore the partition if needed.
+16 MB backup described in `my_exploration/robot/hardware.md` and restore the
+partition if needed.
 
 The upstream XiaoZhi firmware does not implement the vendor's
 `espdeviceverifyservice.ytqhz.com` license check, so this board code preserves
@@ -158,4 +159,4 @@ need the original activation flow.
 - Motors do not turn below roughly 60 % duty with the L298N on this rail, so
   non-zero speed commands are mapped into 60-100 % duty.
 - No LiDAR/VL53L0X or built-in camera. External USB UVC camera support is
-  compiled but disabled; see `my_exploration/camera-and-vision.md`.
+  compiled but disabled; see `my_exploration/camera/README.md`.

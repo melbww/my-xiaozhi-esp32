@@ -1,5 +1,10 @@
 # Testing XiaoZhi Without Hardware: Local Server + Software Client
 
+> Historical guide. The current robot/server setup is in
+> [../server/README.md](../server/README.md) and [../server/tts.md](../server/tts.md).
+> Keep this for the browser-client protocol notes, not as the current install
+> procedure.
+
 *Last checked: 2026-11-01 against `xinnan-tech/xiaozhi-esp32-server` `main`.*
 
 This guide runs the **backend** (`xinnan-tech/xiaozhi-esp32-server`) on your Mac and connects a **browser-based software client** that acts like a device. It lets you test prompts, ASR, LLM, TTS, API keys, and server-side tools/MCP before your ESP32 arrives.

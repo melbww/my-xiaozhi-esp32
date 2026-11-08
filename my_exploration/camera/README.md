@@ -1,5 +1,8 @@
 # Camera and Vision — Qebabe Xiaoche (USB UVC)
 
+> Part of the [exploration index](../README.md). Current robot/server status:
+> [../README.md](../README.md) and [../server/README.md](../server/README.md).
+
 All camera/vision findings for the Qebabe robot: the camera module, USB
 wiring/power, firmware UVC support, the vision upload path, and the server-side
 options.
@@ -41,10 +44,10 @@ options.
 Product screenshots (product page, Chinese):
 
 ```
-my_exploration/cam/IMG_2143.PNG
-my_exploration/cam/IMG_2145.PNG
-my_exploration/cam/IMG_2146.PNG
-my_exploration/cam/IMG_2147.PNG
+my_exploration/camera/images/IMG_2143.PNG
+my_exploration/camera/images/IMG_2145.PNG
+my_exploration/camera/images/IMG_2146.PNG
+my_exploration/camera/images/IMG_2147.PNG
 ```
 
 Specs from the page:
@@ -439,10 +442,11 @@ explicit `VIDIOC_S_FMT` preference in the board code yet.
 |---|---|
 | `main/boards/qebabe-xiaoche/config.json` | UVC Kconfig flags |
 | `main/boards/qebabe-xiaoche/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` (init currently commented) |
-| `my_exploration/cam/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
+| `my_exploration/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
 | `my_exploration/tools/serial_capture.py` | Reset + capture CH343 serial output |
-| `my_exploration/qebabe-xiaoche-project-context.md` | Main bring-up log |
-| `my_exploration/reverse-engineering-vendor-firmware.md` | Binary analysis / pin recovery |
+| `my_exploration/README.md` | Current project index |
+| `my_exploration/history/2026-11-bringup-log.md` | Full dated bring-up log |
+| `my_exploration/vendor/reverse-engineering.md` | Binary analysis / pin recovery |
 
 Commit `feffbfb` contains the camera changes and the product screenshots.
 

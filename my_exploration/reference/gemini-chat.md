@@ -1,3 +1,8 @@
+# Background Research: ESP32 and XiaoZhi Cloud vs Self-Hosting
+
+> Background research, not current setup. Current robot facts are in
+> [../README.md](../README.md) and [../server/README.md](../server/README.md).
+
 Mental model of esp32
 
 Building a solid mental model of the ESP32 helps you understand how it operates, why it's so popular, and how to approach programming it.
