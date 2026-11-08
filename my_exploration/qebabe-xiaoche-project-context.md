@@ -207,6 +207,64 @@ and opens a new WebSocket. If the Mac's LAN IP changes, update
 `CONFIG_OTA_URL` in `config.json`, `server.ota`, and `server.websocket`, then
 rebuild/reflash and restart the stack.
 
+### 2026-11-08 interruption / barge-in
+
+Interruption is handled by the protocol/pipeline, not by the TTS vendor. The
+server can abort both the LLM and TTS, but natural barge-in depends on AEC.
+
+What works now:
+
+- Say `Hi, ESP` while the robot is speaking: firmware `AbortSpeaking()` sends
+  `{"type":"abort"}`; server `handleAbortMessage()` sets `client_abort`, clears
+  the TTS/audio queues, sends `tts stop`, and the device returns to listening.
+- Press **BOOT**: `ToggleChatState()` -> `AbortSpeaking()` (same path).
+- The LLM streaming loop also checks `client_abort`, so an in-flight LLM
+  response stops too.
+
+Why natural “talk over it” barge-in is off:
+
+- `aec_mode_ = kAecOff` because neither `CONFIG_USE_DEVICE_AEC` nor
+  `CONFIG_USE_SERVER_AEC` is set.
+- In `kDeviceStateSpeaking`, the firmware calls
+  `EnableVoiceProcessing(false)` and keeps only AFE wake-word detection
+  (`EnableWakeWordDetection(IsAfeWakeWord())`).
+- `GetDefaultListeningMode()` returns `kListeningModeAutoStop` when AEC is off.
+
+Enabling barge-in:
+
+- `CONFIG_USE_SERVER_AEC=y` makes the device send `features: {"aec": true}`;
+  the server sets `client_aec`, and `handleAudioMessage()` aborts on detected
+  voice during playback.
+- `CONFIG_USE_DEVICE_AEC=y` is the alternative if the board supports it. This
+  board uses `NoAudioCodecSimplex`; server AEC is the likely route but needs
+  hardware testing.
+- With AEC enabled, `GetDefaultListeningMode()` returns
+  `kListeningModeRealtime` and the mic stays active while speaking.
+
+TTS cancellation:
+
+- Non-streaming (`EdgeTTS`, `CustomTTS`/ElevenLabs, macOS `say`): abort stops
+  queued playback quickly, but the in-flight sentence synthesis cannot be
+  cancelled; it finishes and its result is discarded.
+- Streaming (`HuoshanDoubleStreamTTS`, `AliyunStreamTTS`,
+  `XunfeiStreamTTS`, `IndexStreamTTS`): the provider loop checks
+  `client_abort` and closes the stream, cancelling mid-sentence. Best for
+  barge-in.
+- ElevenLabs has a streaming API, but `CustomTTS` uses plain HTTP and is
+  non-streaming; a dedicated provider would be needed for true cancellation.
+- Local `say` is non-streaming but fast; a cancel endpoint could be added to
+  `local-say-tts.py` if needed.
+
+Code paths:
+
+- Firmware: `main/application.cc` (`AbortSpeaking`,
+  `HandleWakeWordDetectedEvent`, `GetDefaultListeningMode`, state change),
+  `main/protocols/protocol.cc` (`abort` message), `main/audio/audio_service.cc`
+  (AEC and send queue).
+- Server: `core/handle/abortHandle.py`, `core/handle/receiveAudioHandle.py`,
+  `core/handle/sendAudioHandle.py`, `core/providers/tts/base.py`,
+  `core/connection.py`.
+
 ## Quick reference
 
 | Item | Value |
@@ -224,6 +282,7 @@ rebuild/reflash and restart the stack.
 | OTA server | `http://192.168.1.6:8002/xiaozhi/ota/` (self-hosted manager-api) |
 | WebSocket server | `ws://192.168.1.6:8000/xiaozhi/v1/` |
 | Server stack | `/Users/wenwu/work/xiaozhi-esp32-server` (full module, Docker) |
+| Barge-in | Wake word / BOOT abort works; natural talk-over needs AEC (currently off) |
 | Backup | `backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin` |
 | Backup SHA-256 | `f09041302f1949795d666766e4b2bea9c664314eb06bff8881303a856ee0019a` |
 | Device ID | `RUK5IES0L128X` in the `id` partition |
