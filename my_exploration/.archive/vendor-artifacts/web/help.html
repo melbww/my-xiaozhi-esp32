@@ -1,0 +1,125 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>帮助：G-code 教程</title>
+    <style>
+        :root {
+            --panel: rgba(15, 23, 42, 0.78);
+            --panel-border: rgba(148, 163, 184, 0.16);
+            --text: #e5eefb;
+            --muted: #94a3b8;
+            --accent: #38bdf8;
+            --shadow: 0 30px 80px rgba(2, 6, 23, 0.45);
+        }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.24), transparent 30%),
+                radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.16), transparent 28%),
+                linear-gradient(160deg, #020617, #0f172a 45%, #111827);
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            padding: 24px;
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+        .nav-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .nav-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 9px 14px;
+            border-radius: 999px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 13px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        h1, h2 { color: var(--text); }
+        p, li { color: var(--muted); line-height: 1.7; }
+        pre {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            overflow: auto;
+            color: var(--text);
+        }
+        code {
+            color: #bfe9ff;
+        }
+        a { color: #bfe9ff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-row">
+            <a href="/" class="nav-pill">遥控器</a>
+            <a href="/music" class="nav-pill">音乐控制</a>
+            <a href="/config" class="nav-pill">配置中心</a>
+        </div>
+        <h1>📘 G-code 教程（灯光控制）</h1>
+        <p>本页说明设备支持的 G-code 语法、常见效果以及示例，便于用户自行编写与调试。</p>
+
+        <h2>1. 基本格式</h2>
+        <p>通用格式：<code>灯珠数量,速度,命令或颜色参数...</code></p>
+        <ul>
+            <li><strong>灯珠数量</strong>：要控制的 LED 个数（整数）。</li>
+            <li><strong>速度</strong>：多用于动态效果，数值越大通常越快；静态颜色可填 0。</li>
+            <li><strong>命令/颜色参数</strong>：可以是效果代码（例如 R 表示彩虹），也可以是若干 RGB 值（0-255）。</li>
+        </ul>
+
+        <h2>2. 常见效果代码</h2>
+        <pre>
+R       彩虹
+P       彩虹流水
+C       多色流水（后接若干 RGB）
+G       渐变（后接若干 RGB）
+W       呼吸（后接 RGB）
+S       跑马灯（后接 RGB）
+M / F   闪烁（F3 表示闪烁 3 次）
+L       闪电效果
+V/T/U/N/K  波浪/流星/脉冲/雪花/赛车等
+        </pre>
+
+        <h2>3. 静态颜色示例</h2>
+        <p>把所有灯珠设为固定颜色：<code>&lt;count&gt;,0,R,G,B</code><br>例如：<code>5,0,0,0,255</code>（5 颗蓝色）。</p>
+
+        <h2>4. 多颜色与进阶</h2>
+        <p>某些命令允许接多个 RGB 值形成多段效果，例如：</p>
+        <pre>7,50,C,255,0,0,0,255,0,0,0,255</pre>
+
+        <h2>5. 在线测试与调试</h2>
+        <ol>
+            <li>在“配置”或“遥控器”页面使用实时测试框粘贴 G-code 并点击测试。</li>
+            <li>若出现残光，先用 <code>&lt;count&gt;,0,0,0,0</code> 清空。</li>
+            <li>大量 LED 或高速会导致刷新变慢，建议先使用少量灯进行调试。</li>
+        </ol>
+
+        <h2>6. 常见问题</h2>
+        <ul>
+            <li>为什么只有前 N 颗生效？——请在“配置”页设置正确的灯珠数量。</li>
+            <li>如何关闭所有灯？——使用 <code>&lt;count&gt;,0,0,0,0</code> 或遥控器页的“关闭”按钮。</li>
+        </ul>
+
+        <p><a href="/config">返回配置页</a> · <a href="/">返回遥控器</a> · <a href="/music">前往音乐控制</a></p>
+    </div>
+</body>
+</html>
