@@ -297,7 +297,7 @@ server:
 Current local state (2026-11-08): the full stack is running from
 `/Users/wenwu/work/xiaozhi-esp32-server` and the robot now uses it for OTA and
 WebSocket (`ws://192.168.1.6:8000/xiaozhi/v1/`). The effective server config is
-`my_explorations/digital-human/deploy/data/.config.yaml`; its
+`my_explorations/server/deploy/data/.config.yaml`; its
 `vision_explain` is `http://192.168.1.6:8003/mcp/vision/explain`. Vision still
 cannot answer because `VLLM_ChatGLMVLLM` holds a placeholder API key, and the
 USB camera is not powered (see the archived USB-host test). A restart of

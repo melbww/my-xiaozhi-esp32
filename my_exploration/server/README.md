@@ -4,8 +4,10 @@
 **Server repo:** `/Users/wenwu/work/xiaozhi-esp32-server`
 
 The robot uses a full-module `xiaozhi-esp32-server` deployment instead of the
-official cloud. The `digital-human` browser runtime is **not** part of this
-path; it is optional and currently stopped.
+official cloud. In the server repo the backend scripts and runtime data live
+under `my_explorations/server/`; `my_explorations/digital-human/` is only the
+optional browser simulator. The `digital-human` browser runtime is **not** part
+of this path and is currently stopped.
 
 ## Architecture
 
@@ -27,10 +29,10 @@ MySQL + Redis
 cd /Users/wenwu/work/xiaozhi-esp32-server
 
 # full stack: manager-api, xiaozhi-server, MySQL, Redis
-my_explorations/digital-human/iac/docker-stack.sh up
-my_explorations/digital-human/iac/docker-stack.sh status
-my_explorations/digital-human/iac/docker-stack.sh restart
-my_explorations/digital-human/iac/docker-stack.sh down
+my_explorations/server/iac/docker-stack.sh up
+my_explorations/server/iac/docker-stack.sh status
+my_explorations/server/iac/docker-stack.sh restart
+my_explorations/server/iac/docker-stack.sh down
 ```
 
 `docker-stack.sh up` tries to pull images first and falls back to the locally
@@ -79,7 +81,7 @@ docker logs -f xiaozhi-esp32-server-web
 Persisted server log:
 
 ```text
-my_explorations/digital-human/deploy/logs/server.log
+my_explorations/server/deploy/logs/server.log
 ```
 
 The optional `digital-human` Live Logs page (`http://192.168.1.6:8006/logs.html`)
@@ -109,6 +111,6 @@ If the Mac’s LAN IP changes, update all of:
 - `manager-api` uses MySQL and Redis; allow ~20–30 s after `up` before the
   console/OTA are ready.
 - The full stack’s `server.secret` is in
-  `my_explorations/digital-human/deploy/data/.config.yaml` (gitignored).
+  `my_explorations/server/deploy/data/.config.yaml` (gitignored).
 - The robot’s audio path is its own INMP441 → WebSocket → server. The Mac
   microphone is not used by the robot.

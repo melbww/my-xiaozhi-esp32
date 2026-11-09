@@ -37,7 +37,7 @@ Start the self-hosted server (separate repo):
 
 ```sh
 cd /Users/wenwu/work/xiaozhi-esp32-server
-my_explorations/digital-human/iac/docker-stack.sh up
+my_explorations/server/iac/docker-stack.sh up
 my_explorations/local-say-tts/local-say-tts.sh start
 ```
 
