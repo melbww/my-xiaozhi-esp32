@@ -100,7 +100,7 @@ browser testing, it also starts a Mac wake-word listener unless
 
 If the Mac’s LAN IP changes, update all of:
 
-- `CONFIG_OTA_URL` in `main/boards/qebabe-xiaoche/config.json` (rebuild/reflash)
+- `CONFIG_OTA_URL` in `main/boards/desk-bot-01/config.json` (rebuild/reflash)
 - `server.ota`, `server.websocket`, `server.fronted_url` in the 智控台
 - Any `vision_explain` URL in the server config
 

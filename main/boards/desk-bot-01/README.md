@@ -1,8 +1,12 @@
-# Qebabe Xiaoche (ESP32-S3 robot car)
+# Desk Bot 01 (ESP32-S3 robot car)
 
 Vendor robot car based on an ESP32-S3-WROOM-1 N16R8 development board. This
 board definition reconstructs the hardware from the vendor wiring diagram and
 BOM; the vendor's original `compact_wifi_board.cc` was not available.
+
+> **Naming history:** this board was named `qebabe-xiaoche` until 2026-11-09.
+> The old name and board identity are preserved only in
+> `my_exploration/.archive/` and the historical build log.
 
 ## Hardware
 
@@ -84,7 +88,7 @@ my_explorations/digital-human/iac/docker-stack.sh status
 
 ```sh
 python3 scripts/build.py --list-boards
-python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche
+python3 scripts/build.py desk-bot-01 --name desk-bot-01
 ```
 
 Then flash over the CH343 UART port:

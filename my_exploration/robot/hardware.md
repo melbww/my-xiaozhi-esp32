@@ -1,10 +1,10 @@
-# Qebabe Xiaoche — Hardware
+# Desk Bot 01 — Hardware
 
 **Last verified:** 2026-11-08
 **Full history:** [../.archive/history/2026-11-bringup-log.md](../.archive/history/2026-11-bringup-log.md)
 
 The board is a vendor robot car, not an upstream devkit. The custom board
-definition lives at `main/boards/qebabe-xiaoche/`.
+definition lives at `main/boards/desk-bot-01/`.
 
 ## Device identification
 
@@ -26,8 +26,9 @@ USB-UART: CH343 1a86:55d3 "USB Single Serial"
 | Vendor device ID | `RUK5IES0L128X` in the `id` partition |
 | Board UUID | `0e574ec5-5b44-479d-9293-40a52ccd5b43` (vendor NVS) |
 
-The firmware identifies the board as `qebabe-xiaoche` (MCP server name and
-status string).
+The firmware identifies the board as `desk-bot-01` (MCP server name and
+status string). Before the 2026-11-09 rename it reported the old
+`qebabe-xiaoche` identity; that only matters for logs captured before then.
 
 ## USB ports (dual USB-C)
 
@@ -144,7 +145,7 @@ Caveats:
 
 ## Board definition
 
-Added `main/boards/qebabe-xiaoche/`:
+Added `main/boards/desk-bot-01/`:
 
 | File | Purpose |
 |---|---|
@@ -156,9 +157,9 @@ Added `main/boards/qebabe-xiaoche/`:
 
 Also added:
 
-- `CONFIG_BOARD_TYPE_QEBABE_XIAOCHE` in `main/Kconfig.projbuild`
-- `BOARD_DIR "qebabe-xiaoche"` branch in `main/CMakeLists.txt`
-- `BOARD_TYPE_QEBABE_XIAOCHE` in the `DISPLAY_OLED_TYPE` dependency list
+- `CONFIG_BOARD_TYPE_DESK_BOT_01` in `main/Kconfig.projbuild`
+- `BOARD_DIR "desk-bot-01"` branch in `main/CMakeLists.txt`
+- `BOARD_TYPE_DESK_BOT_01` in the `DISPLAY_OLED_TYPE` dependency list
 
 This is a **reconstruction** from the vendor BOM/diagram, not the vendor’s
 original source.

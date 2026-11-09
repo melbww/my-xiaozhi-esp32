@@ -17,7 +17,7 @@ These docs were split from one long context file on 2026-11-09. The goal is
 5. **One topic per page.** If a page grows past ~250 lines, split it and add a
    link from the index.
 6. **Link, don’t duplicate.** Cross-link related pages and the board README
-   (`main/boards/qebabe-xiaoche/README.md`).
+   (`main/boards/desk-bot-01/README.md`).
 7. **Use relative links** inside `my_exploration/`; use repo-relative paths in
    commands.
 8. **Keep commands copy-pasteable.** Use the real serial port, IDF path, and
@@ -54,5 +54,5 @@ These docs were split from one long context file on 2026-11-09. The goal is
 
 ## Related skill
 
-The OpenCode skill **`qebabe-xiaoche-docs`** encodes the same workflow for
+The OpenCode skill **`desk-bot-01-docs`** encodes the same workflow for
 future agents. If the layout changes, update the skill too.

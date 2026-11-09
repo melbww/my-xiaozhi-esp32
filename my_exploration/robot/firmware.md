@@ -1,4 +1,4 @@
-# Qebabe Xiaoche — Firmware Build, Flash, and Recovery
+# Desk Bot 01 — Firmware Build, Flash, and Recovery
 
 **Last verified:** 2026-11-08
 **Hardware details:** [hardware.md](hardware.md)
@@ -14,7 +14,7 @@
 ```sh
 . /Users/wenwu/esp/esp-idf/export.sh
 cd /Users/wenwu/work/my-xiaozhi-esp32
-python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche
+python3 scripts/build.py desk-bot-01 --name desk-bot-01
 ```
 
 The build generates `build/xiaozhi.bin` (~2.4 MB), bootloader, partition table,
@@ -23,12 +23,12 @@ at `0x0`** (see “Do not do”).
 
 ## Board configuration chain
 
-`main/boards/qebabe-xiaoche/config.json` sets:
+`main/boards/desk-bot-01/config.json` sets:
 
 ```text
-CONFIG_BOARD_TYPE_QEBABE_XIAOCHE=y
+CONFIG_BOARD_TYPE_DESK_BOT_01=y
 CONFIG_OLED_SSD1306_128X64=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="main/boards/qebabe-xiaoche/partitions.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="main/boards/desk-bot-01/partitions.csv"
 CONFIG_OTA_URL="http://192.168.1.6:8002/xiaozhi/ota/"
 CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y
 CONFIG_ESP_VIDEO_ENABLE_DVP_VIDEO_DEVICE=n
@@ -74,7 +74,7 @@ Non-interactive capture with reset (IDF Python env has pyserial):
 
 Expected current boot path:
 
-- `SKU=qebabe-xiaoche`, SSD1306/LVGL initialized
+- `SKU=desk-bot-01`, SSD1306/LVGL initialized
 - `NoAudioCodec: Simplex channels created`
 - 30 MCP tools registered (23 visible to the model, 7 user-only)
 - Wi-Fi from NVS; OTA from `192.168.1.6:8002`
@@ -159,7 +159,9 @@ Consequences:
 - Wi-Fi credentials, UUID, activation/MQTT config, and settings come from the
   vendor NVS.
 - The hostname `Xiaozhi-CE50` is derived from the Wi-Fi MAC.
-- The board type `qebabe-xiaoche` comes from our `config.json`/`BOARD_TYPE`.
+- The board type `desk-bot-01` comes from our `config.json`/`BOARD_TYPE`.
+  Renamed from `qebabe-xiaoche` on 2026-11-09; builds and boot logs from
+  before that date show the old identity.
 - The device ID `RUK5IES0L128X` remains in the `id` partition.
 
 ### Erase only NVS (optional clean provisioning)
@@ -175,8 +177,8 @@ This removes Wi-Fi, UUID, and saved settings; the robot should enter the
 
 ## Validation
 
-- `python3 scripts/build.py --list-boards` shows `qebabe-xiaoche` (esp32s3).
-- `gen_esp32part.py` validates `main/boards/qebabe-xiaoche/partitions.csv`.
+- `python3 scripts/build.py --list-boards` shows `desk-bot-01` (esp32s3).
+- `gen_esp32part.py` validates `main/boards/desk-bot-01/partitions.csv`.
 - `python3 -m unittest discover -s scripts/tests` passes with a `python` shim
   (the CI script invokes `python`, which is not on PATH on this Mac).
 - `clang-format --dry-run -Werror` passes for the board C/C++ files.
@@ -207,13 +209,13 @@ uvx --from esptool esptool --chip esp32s3 \
 ## Takeover checklist
 
 1. Read [../README.md](../README.md), this file, and
-   `main/boards/qebabe-xiaoche/README.md`.
+   `main/boards/desk-bot-01/README.md`.
 2. `ls /dev/cu.*`; confirm CH343 `1a86:55d3`.
 3. `. /Users/wenwu/esp/esp-idf/export.sh`; confirm `idf.py --version` is 6.1.
 4. `git status`; preserve unrelated worktree changes.
-5. Build: `python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche`.
+5. Build: `python3 scripts/build.py desk-bot-01 --name desk-bot-01`.
 6. Flash individual images with `esptool` (preserves `id`/NVS).
-7. Capture the boot log; confirm `SKU=qebabe-xiaoche`, display, audio, Wi-Fi,
+7. Capture the boot log; confirm `SKU=desk-bot-01`, display, audio, Wi-Fi,
    OTA, WebSocket.
 8. Test motors/LED; adjust direction/PWM if needed.
 9. Keep the 16 MB backup; do not erase `id`/NVS.

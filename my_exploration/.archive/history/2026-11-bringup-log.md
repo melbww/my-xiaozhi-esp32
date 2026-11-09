@@ -7,6 +7,10 @@
 > narrative; it may mention superseded details (MQTT activation, old motor
 > pins, 27 MCP tools) that were later corrected.
 
+**Rename note (2026-11-09):** The board was renamed from `qebabe-xiaoche` to
+`desk-bot-01`. Everything below preserves the original dated wording, including
+the old board, path, and identity names.
+
 **Date:** 2026-11-04
 
 **Filename note:** This file was moved from
@@ -37,10 +41,10 @@ robot while keeping a full-flash rollback. Priorities:
 - Board definition is **committed** (`22a4d54`; later commits `448b450`,
   `387d340`, and `36cf3b3` updated it).
 - `main/CMakeLists.txt` and `main/Kconfig.projbuild` are committed.
-- `build-qebabe.log` is a generated build log that is currently tracked in
-  `36cf3b3`. It should be untracked and ignored when cleaning up:
-  `git rm --cached build-qebabe.log`, then add `build-qebabe.log` to
-  `.gitignore`.
+- `build-qebabe.log` (now archived at `.archive/history/build-qebabe.log`) is
+  a generated build log that was tracked in `36cf3b3`. It should be untracked
+  and ignored when cleaning up: `git rm --cached <path>`, then add the log
+  name to `.gitignore`.
 - Generated `build/` and `sdkconfig` are ignored by `.gitignore`.
 - Backup: `backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin` (gitignored `*.bin`).
 - Vendor files: `../../vendor/from_vendor/`;

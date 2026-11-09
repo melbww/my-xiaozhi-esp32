@@ -1,9 +1,9 @@
 ---
-name: qebabe-xiaoche-docs
-description: Maintain the Qebabe Xiaoche ESP32-S3 exploration documentation in /Users/wenwu/work/my-xiaozhi-esp32/my_exploration. Use when adding or updating robot hardware/firmware/server/TTS/camera/vendor findings, archiving old exploration, fixing links, or deciding where a new fact belongs.
+name: desk-bot-01-docs
+description: Maintain the Desk Bot 01 ESP32-S3 exploration documentation in /Users/wenwu/work/my-xiaozhi-esp32/my_exploration. Use when adding or updating robot hardware/firmware/server/TTS/camera/vendor findings, archiving old exploration, fixing links, or deciding where a new fact belongs.
 ---
 
-# Qebabe Xiaoche Docs
+# Desk Bot 01 Docs
 
 Keep the documentation **current, focused, and easy to provide as context**.
 The active docs are a small index plus focused pages; anything superseded goes
@@ -59,7 +59,7 @@ Link to it; do not copy large configs here. Local TTS service:
 4. **Update the index** (`README.md`) if current state, active docs, or archive
    links changed.
 5. **Check links and paths** with `rg`; update the old-path stub
-   `qebabe-xiaoche-project-context.md` if a target moved.
+   `desk-bot-01-project-context.md` if a target moved.
 6. **Do not delete** docs or artifacts without asking. Move them to `.archive/`
    and leave a pointer if they were linked externally.
 

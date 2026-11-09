@@ -1,8 +1,8 @@
-# Qebabe Xiaoche ESP32-S3 — Exploration Index
+# Desk Bot 01 ESP32-S3 — Exploration Index
 
-This folder documents a vendor **Qebabe Xiaoche** robot car (ESP32-S3 N16R8)
-that was backed up, reverse-engineered, and reflashed with a custom
-`qebabe-xiaoche` board definition in this repository. It also covers the
+This folder documents our **Desk Bot 01**, a vendor robot car (ESP32-S3
+N16R8) that was backed up, reverse-engineered, and reflashed with a custom
+`desk-bot-01` board definition in this repository. It also covers the
 self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 
 **Last verified:** 2026-11-09
@@ -12,7 +12,7 @@ self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 | Area | Status |
 |---|---|
 | Hardware | Identified; full 16 MB flash backup taken |
-| Firmware | `qebabe-xiaoche`, app `2.5.3`, ESP-IDF 6.1 |
+| Firmware | `desk-bot-01`, app `2.5.3`, ESP-IDF 6.1 |
 | OTA / WebSocket | Self-hosted server, `192.168.1.6:8002` / `:8000` |
 | TTS | Local macOS `say` via `CustomTTS` (fast); Edge TTS available |
 | `digital-human` runtime | Stopped; **not part of the robot path** |
@@ -27,7 +27,7 @@ Build and flash the firmware:
 ```sh
 cd /Users/wenwu/work/my-xiaozhi-esp32
 . /Users/wenwu/esp/esp-idf/export.sh
-python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche
+python3 scripts/build.py desk-bot-01 --name desk-bot-01
 ```
 
 See [robot/firmware.md](robot/firmware.md) for the flash command that preserves
@@ -72,7 +72,16 @@ See [server/README.md](server/README.md) and [server/tts.md](server/tts.md).
 
 ## Related code
 
-- `main/boards/qebabe-xiaoche/` — board definition and README
+- `main/boards/desk-bot-01/` — board definition and README
 - `main/Kconfig.projbuild`, `main/CMakeLists.txt` — board selection chain
 - `/Users/wenwu/work/xiaozhi-esp32-server` — self-hosted server
 - `my_explorations/local-say-tts/` — local macOS TTS service (server repo)
+
+## Naming history
+
+The board definition was named `qebabe-xiaoche` before 2026-11-09. It was
+renamed to `desk-bot-01` everywhere (board directory, `BOARD_TYPE`, build
+variant, MCP/board identity, and docs). The old name now appears only in
+historical material under [.archive/](.archive/), including
+`.archive/history/build-qebabe.log`; vendor release names such as
+`qebabe-xiaoche-c3` keep the vendor's own slug.

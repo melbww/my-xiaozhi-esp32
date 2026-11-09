@@ -4,9 +4,9 @@
 **Parent index:** [../README.md](../README.md)
 
 This folder keeps the vendor material that is still useful for current work:
-the BOM and the accurate wiring diagram. The vendor’s original
-`qebabe-xiaoche` source was not available; the board definition was
-reconstructed from these plus the vendor binary.
+the BOM and the accurate wiring diagram. The vendor’s original firmware
+source was not available; the board definition was reconstructed from these
+plus the vendor binary.
 
 ## Inventory
 
@@ -35,9 +35,9 @@ The deep-dive vendor analysis and large artifacts are in `.archive/`:
   It is a different project/partition layout.
 - Do not flash the vendor application binary over the S3 robot; it is for
   analysis and a different build/partition configuration.
-- The C3 2.2.x notes describe a **different chip variant**
-  (`qebabe-xiaoche-c3`, 4 MB flash, factory partition). Do not apply its pin map
-  or flash layout to this S3 robot.
+- The C3 2.2.x notes describe a **different chip variant** (vendor release
+  slug `qebabe-xiaoche-c3`, 4 MB flash, factory partition). Do not apply its
+  pin map or flash layout to this S3 robot.
 
 ## First diagram caveat
 

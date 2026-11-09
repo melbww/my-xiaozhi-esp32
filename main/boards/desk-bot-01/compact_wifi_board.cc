@@ -21,14 +21,14 @@
 #include <cstdlib>
 #include <string>
 
-#define TAG "QebabeXiaocheBoard"
+#define TAG "DeskBot01Board"
 
 // The vendor firmware exposes a lamp on GPIO18, but this hardware revision has
 // no separate lamp: the 7-LED WS2812 strip is the only light. Wrap the strip so
 // the lamp and RGB tools can override the normal status colors.
-class QebabeStatusLed : public Led {
+class DeskBot01StatusLed : public Led {
 public:
-    QebabeStatusLed(gpio_num_t gpio, uint16_t max_leds) : strip_(gpio, max_leds) {}
+    DeskBot01StatusLed(gpio_num_t gpio, uint16_t max_leds) : strip_(gpio, max_leds) {}
 
     void OnStateChanged() override {
         if (!override_active_) {
@@ -51,7 +51,7 @@ private:
     bool override_active_ = false;
 };
 
-class QebabeXiaocheBoard : public WifiBoard {
+class DeskBot01Board : public WifiBoard {
 private:
     i2c_master_bus_handle_t display_i2c_bus_ = nullptr;
     esp_lcd_panel_io_handle_t panel_io_ = nullptr;
@@ -255,7 +255,7 @@ private:
     }
 
     static void OnMotorStopTimer(void* arg) {
-        static_cast<QebabeXiaocheBoard*>(arg)->SetMotorSpeeds(0, 0);
+        static_cast<DeskBot01Board*>(arg)->SetMotorSpeeds(0, 0);
     }
 
     void InitializeMotorTimer() {
@@ -432,8 +432,8 @@ private:
             });
     }
 
-    QebabeStatusLed& GetStatusLed() {
-        static QebabeStatusLed led(BUILTIN_LED_GPIO, BUILTIN_LED_COUNT);
+    DeskBot01StatusLed& GetStatusLed() {
+        static DeskBot01StatusLed led(BUILTIN_LED_GPIO, BUILTIN_LED_COUNT);
         return led;
     }
 
@@ -537,7 +537,7 @@ private:
     }
 
 public:
-    QebabeXiaocheBoard()
+    DeskBot01Board()
         : boot_button_(BOOT_BUTTON_GPIO),
           volume_up_button_(VOLUME_UP_BUTTON_GPIO),
           volume_down_button_(VOLUME_DOWN_BUTTON_GPIO) {
@@ -569,4 +569,4 @@ public:
     virtual Display* GetDisplay() override { return display_; }
 };
 
-DECLARE_BOARD(QebabeXiaocheBoard);
+DECLARE_BOARD(DeskBot01Board);

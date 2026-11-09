@@ -1,4 +1,4 @@
-# Moved — Qebabe Xiaoche Documentation
+# Moved — Desk Bot 01 Documentation
 
 This document was split into focused pages on 2026-11-09 so it stays readable
 and maintainable. Start at the [exploration index](README.md).

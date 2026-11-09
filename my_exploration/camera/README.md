@@ -1,9 +1,9 @@
-# Camera and Vision — Qebabe Xiaoche (USB UVC)
+# Camera and Vision — Desk Bot 01 (USB UVC)
 
 > Part of the [exploration index](../README.md). Current robot/server status:
 > [../README.md](../README.md) and [../server/README.md](../server/README.md).
 
-All camera/vision findings for the Qebabe robot: the camera module, USB
+All camera/vision findings for the Desk Bot 01 robot: the camera module, USB
 wiring/power, firmware UVC support, the vision upload path, and the server-side
 options.
 
@@ -87,7 +87,7 @@ modules use a different order (5V/D−/D+/GND).
 
 ## USB ports and power
 
-The Qebabe board has two USB-C ports:
+The Desk Bot 01 board has two USB-C ports:
 
 | Port | Chip | Use |
 |---|---|---|
@@ -147,7 +147,7 @@ CC/cable issue from a dead module.
 
 ### Kconfig
 
-`main/boards/qebabe-xiaoche/config.json`:
+`main/boards/desk-bot-01/config.json`:
 
 ```json
 "CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y",
@@ -159,7 +159,7 @@ repo contains the USB UVC host driver.
 
 ### Board code
 
-`main/boards/qebabe-xiaoche/compact_wifi_board.cc`:
+`main/boards/desk-bot-01/compact_wifi_board.cc`:
 
 - `#include "esp_video.h"`
 - `EspVideo* camera_ = nullptr;`
@@ -201,7 +201,7 @@ camera_ = new EspVideo(video_config);
 I (354) usb_uvc_device: Waiting for UVC device to be enumerated...
 E (10354) usb_uvc_device: uvc_video_init(266): Failed to take UVC device ready semaphore
 E (10354) EspVideo: open /dev/video40 failed, errno=19(No such device)
-I (10354) QebabeXiaocheBoard: USB UVC camera initialized
+I (10354) DeskBot01Board: USB UVC camera initialized
 I (10504) MCP: Add tool: self.camera.take_photo
 ```
 
@@ -223,7 +223,7 @@ No `usb_uvc_device`, `EspVideo`, or `self.camera.take_photo`.
 1. Uncomment `InitializeCamera();` in the board constructor.
 2. Build and flash the app:
    ```sh
-   python3 scripts/build.py qebabe-xiaoche --name qebabe-xiaoche
+   python3 scripts/build.py desk-bot-01 --name desk-bot-01
    esptool --chip esp32s3 -p /dev/cu.usbmodem... -b 230400 \
      write-flash 0x20000 build/xiaozhi.bin
    ```
@@ -327,8 +327,8 @@ USB camera is not powered (see the archived USB-host test). A restart of
 
 | File | Purpose |
 |---|---|
-| `main/boards/qebabe-xiaoche/config.json` | UVC Kconfig flags |
-| `main/boards/qebabe-xiaoche/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` (init currently commented) |
+| `main/boards/desk-bot-01/config.json` | UVC Kconfig flags |
+| `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` (init currently commented) |
 | `my_exploration/.archive/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
 | `my_exploration/tools/serial_capture.py` | Reset + capture CH343 serial output |
 | `my_exploration/README.md` | Current project index |

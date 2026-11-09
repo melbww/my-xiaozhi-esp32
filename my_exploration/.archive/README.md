@@ -7,11 +7,16 @@ The archive keeps earlier exploration for traceability without making the
 active docs long. Paths inside archived docs may refer to the pre-archive
 layout; use the active docs for current commands.
 
+Archived material also keeps the board's old name, `qebabe-xiaoche`. On
+2026-11-09 the active board definition was renamed to `desk-bot-01`; read the
+old name in anything below as a historical alias.
+
 ## Contents
 
 | Path | What it is |
 |---|---|
 | [history/2026-11-bringup-log.md](history/2026-11-bringup-log.md) | Full 2026-11-04 → 2026-11-08 bring-up narrative |
+| [history/build-qebabe.log](history/build-qebabe.log) | Build log from the pre-rename board definition |
 | [reference/README.md](reference/README.md) | Early local-server guide, background research, architecture parable |
 | [vendor/reverse-engineering.md](vendor/reverse-engineering.md) | Vendor binary extraction/disassembly and pin recovery |
 | [vendor/web-ui-api.md](vendor/web-ui-api.md) | Vendor LAN web UI/API notes (not implemented) |
