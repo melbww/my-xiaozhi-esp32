@@ -25,6 +25,7 @@ to `.archive/`.
 | `my_exploration/server/README.md` | Self-hosted stack, OTA/WS, activation, logs |
 | `my_exploration/server/tts.md` | TTS choices, latency, local `say`, barge-in |
 | `my_exploration/camera/README.md` | Current camera status, firmware support, vision |
+| `my_exploration/docs/framework-layers.md` | Framework layers, NVS persistence, OTA/cloud selection, display and wake-word wiring |
 | `my_exploration/vendor/README.md` | Vendor BOM/wiring and inventory |
 | `my_exploration/MAINTENANCE.md` | Doc conventions and update checklist |
 | `my_exploration/tools/` | Helper scripts (e.g. serial capture) |
