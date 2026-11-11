@@ -150,6 +150,59 @@ camera Type-C male
 The powered hub supplies the camera's 5 V; the ESP32-S3 only needs D+/D− and
 GND. This bypasses both the missing CC resistors and the board's VBUS limits.
 
+### Powered-hub chain on the robot (exact parts)
+
+The board's `USB / OTG` receptacle is **USB-C female**, so the hub must reach it
+through a C-male connector:
+
+```
+board USB-C female
+  <- C-male → A-female "OTG" cable        (also supplies Rd on CC; already proven on the Mac)
+  <- hub's captive USB-A male upstream cable
+  <- self-powered USB-A hub (4-port, 5 V DC barrel-jack adapter)
+  <- hub downstream A port
+  <- C-female → A-male adapter
+  <- camera Type-C male
+```
+
+Requirements for the hub:
+
+- **Self-powered.** A bus-powered hub takes its 5 V from the upstream port, and
+  the board's port supplies none → nothing works. A hub with a USB-C "PD in"
+  meant for charging a laptop is a bad choice: it may only power its ports after
+  PD negotiation, which the ESP32-S3 never performs. Use a DC barrel-jack hub.
+- USB 2.0 is enough (the camera is USB 2.0) and is the cheapest option.
+- The upstream cable must be a **data** cable, not charge-only.
+
+**Gotcha — hub support must be compiled in.** The USB host stack does not
+support external hubs by default (`CONFIG_USB_HOST_HUBS_SUPPORTED` defaults to
+`n`). ESP-IDF 6.x ships the host stack in the managed `espressif/usb`
+component, so this is a build config, not a driver change:
+
+```
+CONFIG_USB_HOST_HUBS_SUPPORTED=y
+CONFIG_USB_HOST_HUB_MULTI_LEVEL=y
+```
+
+The `usb_camera_mic_spk` demo already sets both (its `sdkconfig.defaults`), so
+a hub can be validated with the demo as-is. XiaoZhi's `desk-bot-01`
+`config.json` does **not** set them yet — add them to `sdkconfig_append` before
+expecting `esp_video` to see a camera behind a hub.
+
+With the hub working, the demo log shows two devices (hub first, camera
+second):
+
+```
+W (1430) app_usb_host: USB bus: device 1 at address 1
+W (…) app_usb_host: USB bus: device 1 at address 1, device 2 at address 2
+I (…) app_uvc: UVC device connected
+```
+
+Also note the console must stay on the CH343 `UART / COM` port: once the USB
+host driver owns the OTG pins, the chip's USB-Serial/JTAG device disappears from
+the Mac.
+
+
 ## Mac diagnostics (what was observed)
 
 Commands:
