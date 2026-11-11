@@ -507,6 +507,10 @@ private:
 
     void InitializeCamera() {
 #ifdef CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE
+#ifdef CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE
+        // Temporary: raise the EspVideo log level so VIDIOC_ENUM_FMT dumps the formats.
+        esp_log_level_set("EspVideo", ESP_LOG_DEBUG);
+#endif
         esp_video_init_usb_uvc_config_t usb_uvc_config = {
             .uvc =
                 {
@@ -547,10 +551,7 @@ public:
         InitializeDisplayI2c();
         InitializeSsd1306Display();
         InitializeButtons();
-        // Camera temporarily disabled: USB UVC enumeration blocks boot for up
-        // to 10 seconds when no camera is attached. Re-enable this call once
-        // the camera enumerates reliably.
-        // InitializeCamera();
+        InitializeCamera();
         InitializeTools();
     }
 

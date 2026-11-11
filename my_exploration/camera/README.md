@@ -18,38 +18,27 @@ options.
 - Root cause of the earlier "Mac sees nothing": the camera's Type-C plug has no
   CC pull-downs, so a **C-to-C** link never enables VBUS. An OTG adapter (or a
   USB-A host port) works around it completely.
+- **The camera now works on the robot (2026-11-11).** VBUS is spliced into the
+  OTG cable; the host then enumerates it at boot and on hot-plug. See
+  [Verified fix](#verified-fix-vbus-splice-in-the-otg-cable).
+- **Power source is currently external (2026-11-11)**: feeding the splice from
+  the board's 5 V did not work, so the camera runs from a third-party 5 V
+  supply. The board 5 V feed is still to be found — use the amp `VIN` node as
+  the measured 5 V reference, not a silkscreen label.
+- Reported UVC modes from the device itself: MJPEG 1280×720@15, 800×480@20,
+  640×480@25, 480×320@25; default 1280×720@30 (bulk, 3×10 KiB transfers).
+  It also exposes a **UAC mic (iface 3) and speaker (iface 4)**.
+- The OTG port still does **not** supply VBUS on its own: each USB-C port's VBUS
+  goes through a Schottky diode *into* the 5 V rail (DevKitC-style), so it can
+  power the board but not a downstream device.
 - Firmware UVC support is present (`CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE`,
-  `EspVideo`, `GetCamera()`), but **camera initialization is currently commented
-  out** in `compact_wifi_board.cc`.
-- Reason: with no enumerating camera, `esp_video` blocks boot for ~10 s waiting
-  for the UVC device, then fails to open `/dev/video40`.
-- Current firmware boots normally (no camera wait), registers 30 MCP tools, and
-  does **not** expose `self.camera.take_photo`.
-- **The camera still does not enumerate on the board**, so this is not an
-  ESP-IDF/UVC-driver problem. Re-tested 2026-11-11 with Espressif's
-  `usb_camera_mic_spk` USB-host demo and a USB-C OTG cable in the `USB / OTG`
-  port (both plug orientations): `USB bus: no devices enumerated`, no UVC/UAC
-  connect event.
-- The board's **USB/OTG port itself is fine**: with a Mac USB-C cable in that
-  port it enumerates as `USB JTAG_serial debug unit` (`0x303a:0x1001`) and the
-  secondary USB-Serial/JTAG console works. So D+/D−, the receptacle and the
-  cable are good.
-- Therefore the OTG port is **not supplying VBUS to the camera**. The board
-  follows the ESP32-S3-DevKitC-1-style design where each USB-C port's VBUS goes
-  through a Schottky diode *into* the 5 V rail; it can power the board but it
-  cannot power a USB device when the board is powered from the 5 V pin. An OTG
-  cable does not change this — it only reshapes the connector.
-- The camera **needs external 5 V**. Either a powered USB-A hub with
-  C-female→A-male adapter behind the OTG cable, 5 V injected into the OTG
-  adapter's VBUS, or a 4-pin pigtail wired to the board's 5 V/GND header pins
-  plus D+→GPIO20 / D−→GPIO19.
-- Firmware state: the **USB-host demo is currently flashed** (SoftAP
-  `USB-AV-DEMO-*`), not XiaoZhi. Reflash `build/xiaozhi.bin` at `0x20000` plus
-  the bootloader/partition table from `build/` to restore the robot.
-  `my_exploration/.archive/camera/backup/` holds a 64 KB `0x0` and 24 KB NVS
-  (`0x9000`) dump taken before the demo was flashed.
-- The local `xiaozhi-esp32-server` vision backend is **not running/configured**
-  yet. The Mac's LAN IP is `192.168.1.6`; the robot is `192.168.1.13`.
+  `EspVideo`, `GetCamera()`). `InitializeCamera()` is now called in the board
+  constructor; without an enumerating camera `esp_video` blocks boot for ~10 s
+  and then fails to open `/dev/video40`.
+- With no camera attached the board still boots normally (after the timeout),
+  registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
+- The local `xiaozhi-esp32-server` vision backend still needs a real VLLM key;
+  the Mac's LAN IP is `192.168.1.6`, the robot is `192.168.1.13`.
 
 ## Camera module
 
@@ -150,7 +139,43 @@ camera Type-C male
 The powered hub supplies the camera's 5 V; the ESP32-S3 only needs D+/D− and
 GND. This bypasses both the missing CC resistors and the board's VBUS limits.
 
-### Powered-hub chain on the robot (exact parts)
+### Verified fix: VBUS splice in the OTG cable
+
+Proven working 2026-11-11. The C-male→A-female OTG cable is opened mid-run and
+only its VBUS wire is diverted; every other conductor is left intact so the
+cable still plugs into the board's `USB / OTG` port normally.
+
+```
+external 5 V ── red (camera side of the cut) ── A-female VBUS ── camera
+               red (plug side of the cut)   = cut, insulated, unused
+GND            ─────────────────────────────  intact through the C plug
+white D− / green D+ ────────────────────────  intact through the C plug
+```
+
+- Feed the **camera side** of the red wire. The plug side sits behind the board's
+  Schottky diode, so feeding it delivers nothing.
+- Do not cut D+/D−. A disturbed or swapped pair shows up as
+  `E (1252) HUB: Root port reset failed` — the host sees a connection, then the
+  port reset fails. A clean pair enumerates immediately.
+- Ground needs no extra wire: the cable's black wire already ties the camera to
+  the board's ground plane.
+- Verify before plugging the camera in: 5.0–5.2 V between A-female VBUS and the
+  shell. Not 9 V — never use a QC/PD fast-charge port as the source.
+- If a mains charger is the source, prefer a **power bank** (floating, no
+  leakage path) and unplug the Mac's own charger while wiring; the CH343
+  `UART / COM` link is the path that would carry a fault into the Mac.
+
+Boot log with the fix applied (`usb_camera_mic_spk` demo):
+
+```
+W (1325) app_usb_host: USB bus: device 1 at address 1
+I (1325) app_uvc: Handling UVC connect addr=1 stream_index=0 frame_num=4
+I (1326) app_uvc: Pick UVC MJPEG 1280x720@15.0fps
+I (1334) app_uac: mic connected addr=1 iface=3 alt_num=1
+I (1380) app_uvc: UVC idle stream opened 480x320@25.0fps
+```
+
+
 
 The board's `USB / OTG` receptacle is **USB-C female**, so the hub must reach it
 through a C-male connector:
