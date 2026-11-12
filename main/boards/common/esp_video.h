@@ -39,9 +39,6 @@ private:
     std::atomic<bool> streaming_on_{false};
     bool is_uvc_ = false;
     bool is_mipi_csi_ = false;
-    std::string video_device_path_;
-    esp_video_init_usb_uvc_config_t uvc_config_ = {};
-    bool has_uvc_config_ = false;
     struct MmapBuffer {
         void* start = nullptr;
         size_t length = 0;
@@ -60,6 +57,7 @@ private:
     std::atomic<bool> camera_connected_{false};
     std::atomic<bool> camera_unplugged_{false};
     std::mutex device_mutex_;
+    int recovery_attempts_ = 0;
     bool log_levels_saved_ = false;
     esp_log_level_t usb_log_level_ = ESP_LOG_INFO;
     esp_log_level_t video_log_level_ = ESP_LOG_INFO;

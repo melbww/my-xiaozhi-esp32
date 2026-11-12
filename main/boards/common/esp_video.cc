@@ -1,6 +1,7 @@
 #include "sdkconfig.h"
 
 #include <esp_heap_caps.h>
+#include <esp_system.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <errno.h>
@@ -112,10 +113,6 @@ static void log_available_video_devices() {
 
 EspVideo::EspVideo(const esp_video_init_config_t& config) {
     is_uvc_ = config.usb_uvc != nullptr;
-    if (config.usb_uvc != nullptr) {
-        uvc_config_ = *config.usb_uvc;
-        has_uvc_config_ = true;
-    }
 
     if (esp_video_init(&config) != ESP_OK) {
         ESP_LOGE(TAG, "esp_video_init failed");
@@ -171,7 +168,6 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         return;
     }
 
-    video_device_path_ = video_device_name;
     is_mipi_csi_ = strcmp(video_device_name, ESP_VIDEO_MIPI_CSI_DEVICE_NAME) == 0;
     SetupDevice();
 }
@@ -423,57 +419,37 @@ void EspVideo::StartStreamMonitor() {
 
 bool EspVideo::RecoverCamera() {
     std::lock_guard<std::mutex> lock(device_mutex_);
-    ESP_LOGW(TAG, "Reopening camera device %s", video_device_path_.c_str());
+    ESP_LOGW(TAG, "Restarting UVC stream on reconnected camera");
 
+    // The disconnect callback closed the old UVC stream, so STREAMOFF only
+    // resets the esp_video stream state and STREAMON opens a fresh UVC stream
+    // against the re-enumerated device.
     int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (video_fd_ >= 0) {
-        // Expected to fail on a dead stream; ignore the error.
+    if (ioctl(video_fd_, VIDIOC_STREAMOFF, &type) != 0) {
+        // EBUSY = esp_video reports ESP_ERR_INVALID_STATE: already stopped.
+        if (errno != EBUSY) {
+            ESP_LOGW(TAG, "STREAMOFF failed: %d(%s)", errno, strerror(errno));
+            return false;
+        }
+    }
+    if (ioctl(video_fd_, VIDIOC_STREAMON, &type) != 0) {
+        ESP_LOGW(TAG, "STREAMON failed: %d(%s)", errno, strerror(errno));
+        return false;
+    }
+
+    // Confirm that frames are really flowing before declaring success.
+    struct v4l2_buffer buf = {};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+    if (ioctl(video_fd_, VIDIOC_DQBUF, &buf) != 0) {
+        ESP_LOGW(TAG, "No frame after restart: %d(%s)", errno, strerror(errno));
         ioctl(video_fd_, VIDIOC_STREAMOFF, &type);
-    }
-    for (auto& b : mmap_buffers_) {
-        if (b.start != nullptr && b.length != 0) {
-            munmap(b.start, b.length);
-        }
-    }
-    mmap_buffers_.clear();
-    streaming_on_ = false;
-    sensor_format_ = 0;
-    if (video_fd_ >= 0) {
-        close(video_fd_);
-        video_fd_ = -1;
-    }
-
-    // Reinstall esp_video so the UVC driver releases the paused stream that was
-    // left behind when the camera disappeared. Only then can it open a new one.
-    esp_err_t err = esp_video_deinit();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_video_deinit failed: %s", esp_err_to_name(err));
         return false;
     }
-    if (!has_uvc_config_) {
-        return false;
+    if (ioctl(video_fd_, VIDIOC_QBUF, &buf) != 0) {
+        ESP_LOGW(TAG, "VIDIOC_QBUF after restart failed: %d(%s)", errno, strerror(errno));
     }
-    esp_video_init_config_t init_config = {};
-    init_config.usb_uvc = &uvc_config_;
-    err = esp_video_init(&init_config);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_video_init failed: %s", esp_err_to_name(err));
-        return false;
-    }
-
-    video_fd_ = open(video_device_path_.c_str(), O_RDWR);
-    if (video_fd_ < 0) {
-        ESP_LOGE(TAG, "Reopen %s failed: %s", video_device_path_.c_str(), strerror(errno));
-        return false;
-    }
-    if (!SetupDevice()) {
-        ESP_LOGE(TAG, "Camera setup failed after reopen");
-        if (video_fd_ >= 0) {
-            close(video_fd_);
-            video_fd_ = -1;
-        }
-        return false;
-    }
+    streaming_on_ = true;
     return true;
 }
 
@@ -537,10 +513,17 @@ void EspVideo::MonitorStream() {
             RestoreDisconnectLogs();
             ESP_LOGW(TAG, "Camera re-enumerated, restarting stream");
             if (RecoverCamera()) {
+                recovery_attempts_ = 0;
                 camera_unplugged_ = false;
                 camera_connected_ = true;
                 ESP_LOGI(TAG, "Camera stream recovered");
             } else {
+                recovery_attempts_++;
+                if (recovery_attempts_ >= 3) {
+                    ESP_LOGE(TAG, "Camera recovery failed %d times, rebooting", recovery_attempts_);
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    esp_restart();
+                }
                 ESP_LOGW(TAG, "Camera recovery failed, will retry");
                 SuppressDisconnectLogs();
                 vTaskDelay(pdMS_TO_TICKS(5000));

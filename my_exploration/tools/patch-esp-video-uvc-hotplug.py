@@ -79,6 +79,37 @@ PATCHES = [
             }
 """,
     ),
+    (
+        COMPONENT / "src" / "device" / "esp_video_usb_uvc_device.c",
+        """    ESP_RETURN_ON_ERROR(uvc_host_stream_stop(device->stream_hdl), TAG, "Failed to stop UVC stream");
+
+    /**
+     * Free all cached frames to avoid UVC stream stop failed
+     */
+    while ((element = esp_video_get_done_element(video, V4L2_BUF_TYPE_VIDEO_CAPTURE)) != NULL) {
+        uvc_host_frame_return(device->stream_hdl, (uvc_host_frame_t *)element->priv_data);
+    }
+
+    ESP_RETURN_ON_ERROR(uvc_host_stream_close(device->stream_hdl), TAG, "Failed to close UVC stream");
+""",
+        """    /* HOTPLUG PATCH: the disconnect callback closes the stream and clears
+     * stream_hdl, so STREAMOFF must still succeed (it only resets the esp_video
+     * stream state). Otherwise reconnecting can never restart capture. */
+    if (device->stream_hdl) {
+        ESP_RETURN_ON_ERROR(uvc_host_stream_stop(device->stream_hdl), TAG, "Failed to stop UVC stream");
+
+        /**
+         * Free all cached frames to avoid UVC stream stop failed
+         */
+        while ((element = esp_video_get_done_element(video, V4L2_BUF_TYPE_VIDEO_CAPTURE)) != NULL) {
+            uvc_host_frame_return(device->stream_hdl, (uvc_host_frame_t *)element->priv_data);
+        }
+
+        ESP_RETURN_ON_ERROR(uvc_host_stream_close(device->stream_hdl), TAG, "Failed to close UVC stream");
+        device->stream_hdl = NULL;
+    }
+""",
+    ),
 ]
 
 for path, old, new in PATCHES:
