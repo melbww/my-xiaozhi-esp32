@@ -48,10 +48,17 @@ options.
   the monitor stops using the old stream and reopens the device: close + munmap,
   `esp_video_deinit()` (releases the UVC stream the driver left paused),
   `esp_video_init()`, reopen `/dev/video40`, then the normal format/buffer setup
-  and `STREAMON`. The icon returns once that succeeds. This is best-effort: if
-  the UVC driver refuses to reinstall, recovery logs an error and retries every
-  ~6 s; a reboot remains the fallback. A `take_photo` request during recovery
-  fails fast with `Capture skipped: camera is restarting` rather than blocking.
+  and `STREAMON`. The icon returns once that succeeds. A `take_photo` request
+  during recovery fails fast with `Capture skipped: camera is restarting` rather
+  than blocking.
+- **Vendor patch required:** the stock `esp_video` UVC driver only pauses the
+  stream on `UVC_HOST_DEVICE_DISCONNECTED`. It never closes it, so the frame
+  stays checked out, the USB device handle stays open, and the camera cannot
+  re-enumerate after a replug. `my_exploration/tools/patch-esp-video-uvc-hotplug.py`
+  makes the disconnect callback return the held frame(s) and call
+  `uvc_host_stream_close()` (the same flow as Espressif's USB UVC example).
+  `managed_components/` is generated and gitignored — rerun the script after a
+  clean build or component update.
 - During testing the camera occasionally dropped off the USB bus by itself
   (`uvc_video_get_parm: UVC device ... is not connected` in the log). The icon
   turned off as expected. If that happens repeatedly, recheck the external 5 V
@@ -449,6 +456,7 @@ yet. Server details: [../server/README.md](../server/README.md).
 | `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
 | `main/boards/common/esp_video.h` | connection probe, hot-plug reopen, `IsStreaming()` |
 | `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, reopen/reinit on reconnect, DQBUF timeout |
+| `my_exploration/tools/patch-esp-video-uvc-hotplug.py` | reapply the vendor UVC disconnect fix after component sync |
 | `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |
 | `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera-icon state |
 | `my_exploration/.archive/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
