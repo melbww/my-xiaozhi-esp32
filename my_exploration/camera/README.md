@@ -37,11 +37,15 @@ options.
   and then fails to open `/dev/video40`.
 - With no camera attached the board still boots normally (after the timeout),
   registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
-- **Status icon (2026-11-12):** the 128×64 OLED top bar now shows a
-  `photo_camera` icon immediately left of the Wi-Fi icon while the UVC stream is
-  running. It is driven by `Camera::IsStreaming()` (implemented by `EspVideo`
-  from `streaming_on_`), so it is visible only when the camera is enumerated and
-  actually producing frames; with no camera the icon stays hidden.
+- **Status icon (2026-11-12):** the 128×64 OLED top bar shows a
+  `photo_camera` icon immediately left of the Wi-Fi icon only while the camera is
+  connected and streaming. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`,
+  which the UVC driver fails with `ENODEV` once it clears the device address on
+  `UVC_HOST_DEVICE_DISCONNECTED`. `Camera::IsStreaming()` requires `STREAMON` to
+  have succeeded, the probe to report connected, and no latched disconnect, so
+  unplugging the camera turns the icon off within ~1 s. After a reconnect the
+  icon stays off because this driver cannot restart the stream without reopening
+  the device (reboot to restore the camera).
 - The local `xiaozhi-esp32-server` vision backend still needs a real VLLM key;
   the Mac's LAN IP is `192.168.1.6`, the robot is `192.168.1.13`.
 
@@ -429,7 +433,8 @@ yet. Server details: [../server/README.md](../server/README.md).
 |---|---|
 | `main/boards/desk-bot-01/config.json` | UVC Kconfig flags |
 | `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
-| `main/boards/common/esp_video.h` | `IsStreaming()` (from `streaming_on_`) for the status icon |
+| `main/boards/common/esp_video.h` | connection probe + `IsStreaming()` for the status icon |
+| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, disconnect latch, DQBUF timeout |
 | `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |
 | `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera-icon state |
 | `my_exploration/.archive/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |

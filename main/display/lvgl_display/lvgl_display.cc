@@ -292,6 +292,7 @@ void LvglDisplay::UpdateStatusBar(bool update_all) {
     if (camera_label_ != nullptr && camera_active_ != camera_active) {
         DisplayLockGuard lock(this);
         camera_active_ = camera_active;
+        ESP_LOGI(TAG, "Camera indicator: %s", camera_active ? "on" : "off");
         lv_label_set_text(camera_label_, camera_active ? MATERIAL_SYMBOLS_PHOTO_CAMERA : "");
     }
 

@@ -1,6 +1,8 @@
 #include "sdkconfig.h"
 
 #include <esp_heap_caps.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -13,6 +15,7 @@
 #include "esp_imgfx_color_convert.h"
 #include "esp_video_device.h"
 #include "esp_video_init.h"
+#include "esp_video_ioctl.h"
 #include "linux/videodev2.h"
 
 #include "board.h"
@@ -108,6 +111,8 @@ static void log_available_video_devices() {
 #endif  // CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE
 
 EspVideo::EspVideo(const esp_video_init_config_t& config) {
+    is_uvc_ = config.usb_uvc != nullptr;
+
     if (esp_video_init(&config) != ESP_OK) {
         ESP_LOGE(TAG, "esp_video_init failed");
         return;
@@ -379,16 +384,63 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
             ESP_LOGI(TAG, "Camera init success, captured %d frames in %lums", capture_count,
                      (unsigned long)((xTaskGetTickCount() - start) * portTICK_PERIOD_MS));
             self->streaming_on_ = true;
+            self->StartStreamMonitor();
             vTaskDelete(NULL);
         },
         "CameraInitTask", 4096, this, 5, nullptr);
 #else
     ESP_LOGI(TAG, "Camera init success");
     streaming_on_ = true;
+    StartStreamMonitor();
 #endif  // CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE
 }
 
+void EspVideo::StartStreamMonitor() {
+    if (!is_uvc_ || monitor_thread_.joinable()) {
+        return;
+    }
+    // Bound DQBUF so a photo capture fails instead of blocking forever when the
+    // camera has been unplugged.
+    struct timeval dqbuf_timeout = {};
+    dqbuf_timeout.tv_sec = 1;
+    if (ioctl(video_fd_, VIDIOC_S_DQBUF_TIMEOUT, &dqbuf_timeout) != 0) {
+        ESP_LOGW(TAG, "Failed to set DQBUF timeout");
+    }
+    monitor_stop_ = false;
+    monitor_thread_ = std::thread(&EspVideo::MonitorStream, this);
+}
+
+void EspVideo::MonitorStream() {
+    while (!monitor_stop_.load()) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        if (monitor_stop_.load() || video_fd_ < 0) {
+            continue;
+        }
+        // The UVC device clears dev_addr on UVC_HOST_DEVICE_DISCONNECTED, which
+        // makes VIDIOC_G_PARM fail. This is a cheap, non-destructive probe.
+        struct v4l2_streamparm parm = {};
+        parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        if (ioctl(video_fd_, VIDIOC_G_PARM, &parm) == 0) {
+            if (!camera_connected_.exchange(true)) {
+                ESP_LOGI(TAG, "Camera connected");
+            }
+        } else {
+            if (camera_connected_.exchange(false)) {
+                ESP_LOGW(TAG, "Camera disconnected");
+            }
+            camera_unplugged_ = true;
+            // The stream cannot be restarted without reopening the device, so
+            // stop probing: keeps the indicator off and avoids driver log spam.
+            break;
+        }
+    }
+}
+
 EspVideo::~EspVideo() {
+    monitor_stop_ = true;
+    if (monitor_thread_.joinable()) {
+        monitor_thread_.join();
+    }
     if (streaming_on_ && video_fd_ >= 0) {
         int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         ioctl(video_fd_, VIDIOC_STREAMOFF, &type);
@@ -411,6 +463,20 @@ void EspVideo::SetExplainUrl(const std::string& url, const std::string& token) {
     explain_token_ = token;
 }
 
+bool EspVideo::IsStreaming() const {
+    // A UVC camera can be unplugged without STREAMON being cleared, so also
+    // require the device to still be connected. A camera that never enumerated
+    // keeps streaming_on_ false, and the unplug latch stops the icon from
+    // reappearing after a reconnect that the stream did not survive.
+    if (!streaming_on_.load()) {
+        return false;
+    }
+    if (!is_uvc_) {
+        return true;
+    }
+    return camera_connected_.load() && !camera_unplugged_.load();
+}
+
 bool EspVideo::Capture() {
     if (encoder_thread_.joinable()) {
         encoder_thread_.join();
@@ -418,7 +484,7 @@ bool EspVideo::Capture() {
 
     if (!streaming_on_ || video_fd_ < 0) {
         ESP_LOGE(TAG, "Capture failed: camera did not initialize (streaming_on_=%d, video_fd_=%d)",
-                 streaming_on_, video_fd_);
+                 static_cast<int>(streaming_on_.load()), video_fd_);
         return false;
     }
 
