@@ -112,6 +112,10 @@ static void log_available_video_devices() {
 
 EspVideo::EspVideo(const esp_video_init_config_t& config) {
     is_uvc_ = config.usb_uvc != nullptr;
+    if (config.usb_uvc != nullptr) {
+        uvc_config_ = *config.usb_uvc;
+        has_uvc_config_ = true;
+    }
 
     if (esp_video_init(&config) != ESP_OK) {
         ESP_LOGE(TAG, "esp_video_init failed");
@@ -167,12 +171,18 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         return;
     }
 
+    video_device_path_ = video_device_name;
+    is_mipi_csi_ = strcmp(video_device_name, ESP_VIDEO_MIPI_CSI_DEVICE_NAME) == 0;
+    SetupDevice();
+}
+
+bool EspVideo::SetupDevice() {
     struct v4l2_capability cap = {};
     if (ioctl(video_fd_, VIDIOC_QUERYCAP, &cap) != 0) {
         ESP_LOGE(TAG, "VIDIOC_QUERYCAP failed, errno=%d(%s)", errno, strerror(errno));
         close(video_fd_);
         video_fd_ = -1;
-        return;
+        return false;
     }
 
     ESP_LOGD(TAG,
@@ -186,7 +196,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         ESP_LOGE(TAG, "VIDIOC_G_FMT failed, errno=%d(%s)", errno, strerror(errno));
         close(video_fd_);
         video_fd_ = -1;
-        return;
+        return false;
     }
     ESP_LOGD(TAG, "VIDIOC_G_FMT: pixelformat=0x%08lx, width=%ld, height=%ld",
              format.fmt.pix.pixelformat, format.fmt.pix.width, format.fmt.pix.height);
@@ -278,7 +288,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         close(video_fd_);
         video_fd_ = -1;
         sensor_format_ = 0;
-        return;
+        return false;
     }
 
     ESP_LOGD(TAG, "selected pixel format: 0x%08lx", setformat.fmt.pix.pixelformat);
@@ -288,7 +298,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         close(video_fd_);
         video_fd_ = -1;
         sensor_format_ = 0;
-        return;
+        return false;
     }
 
 #if CONFIG_XIAOZHI_CAMERA_MIRROR_CONFIGURED
@@ -306,7 +316,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
 
     // 申请缓冲并mmap
     struct v4l2_requestbuffers req = {};
-    req.count = strcmp(video_device_name, ESP_VIDEO_MIPI_CSI_DEVICE_NAME) == 0 ? 2 : 1;
+    req.count = is_mipi_csi_ ? 2 : 1;
     req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     req.memory = V4L2_MEMORY_MMAP;
     if (ioctl(video_fd_, VIDIOC_REQBUFS, &req) != 0) {
@@ -314,7 +324,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         close(video_fd_);
         video_fd_ = -1;
         sensor_format_ = 0;
-        return;
+        return false;
     }
     mmap_buffers_.resize(req.count);
     for (uint32_t i = 0; i < req.count; i++) {
@@ -327,7 +337,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
             close(video_fd_);
             video_fd_ = -1;
             sensor_format_ = 0;
-            return;
+            return false;
         }
         void* start =
             mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, video_fd_, buf.m.offset);
@@ -336,7 +346,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
             close(video_fd_);
             video_fd_ = -1;
             sensor_format_ = 0;
-            return;
+            return false;
         }
         mmap_buffers_[i].start = start;
         mmap_buffers_[i].length = buf.length;
@@ -346,7 +356,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
             close(video_fd_);
             video_fd_ = -1;
             sensor_format_ = 0;
-            return;
+            return false;
         }
     }
 
@@ -356,7 +366,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
         close(video_fd_);
         video_fd_ = -1;
         sensor_format_ = 0;
-        return;
+        return false;
     }
 
 #ifdef CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE
@@ -393,6 +403,7 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
     streaming_on_ = true;
     StartStreamMonitor();
 #endif  // CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE
+    return true;
 }
 
 void EspVideo::StartStreamMonitor() {
@@ -410,28 +421,135 @@ void EspVideo::StartStreamMonitor() {
     monitor_thread_ = std::thread(&EspVideo::MonitorStream, this);
 }
 
+bool EspVideo::RecoverCamera() {
+    std::lock_guard<std::mutex> lock(device_mutex_);
+    ESP_LOGW(TAG, "Reopening camera device %s", video_device_path_.c_str());
+
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (video_fd_ >= 0) {
+        // Expected to fail on a dead stream; ignore the error.
+        ioctl(video_fd_, VIDIOC_STREAMOFF, &type);
+    }
+    for (auto& b : mmap_buffers_) {
+        if (b.start != nullptr && b.length != 0) {
+            munmap(b.start, b.length);
+        }
+    }
+    mmap_buffers_.clear();
+    streaming_on_ = false;
+    sensor_format_ = 0;
+    if (video_fd_ >= 0) {
+        close(video_fd_);
+        video_fd_ = -1;
+    }
+
+    // Reinstall esp_video so the UVC driver releases the paused stream that was
+    // left behind when the camera disappeared. Only then can it open a new one.
+    esp_err_t err = esp_video_deinit();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_video_deinit failed: %s", esp_err_to_name(err));
+        return false;
+    }
+    if (!has_uvc_config_) {
+        return false;
+    }
+    esp_video_init_config_t init_config = {};
+    init_config.usb_uvc = &uvc_config_;
+    err = esp_video_init(&init_config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_video_init failed: %s", esp_err_to_name(err));
+        return false;
+    }
+
+    video_fd_ = open(video_device_path_.c_str(), O_RDWR);
+    if (video_fd_ < 0) {
+        ESP_LOGE(TAG, "Reopen %s failed: %s", video_device_path_.c_str(), strerror(errno));
+        return false;
+    }
+    if (!SetupDevice()) {
+        ESP_LOGE(TAG, "Camera setup failed after reopen");
+        if (video_fd_ >= 0) {
+            close(video_fd_);
+            video_fd_ = -1;
+        }
+        return false;
+    }
+    return true;
+}
+
+void EspVideo::SuppressDisconnectLogs() {
+    if (log_levels_saved_) {
+        return;
+    }
+    usb_log_level_ = esp_log_level_get("usb_uvc_device");
+    video_log_level_ = esp_log_level_get("esp_video");
+    esp_log_level_set("usb_uvc_device", ESP_LOG_NONE);
+    esp_log_level_set("esp_video", ESP_LOG_NONE);
+    log_levels_saved_ = true;
+}
+
+void EspVideo::RestoreDisconnectLogs() {
+    if (!log_levels_saved_) {
+        return;
+    }
+    esp_log_level_set("usb_uvc_device", usb_log_level_);
+    esp_log_level_set("esp_video", video_log_level_);
+    log_levels_saved_ = false;
+}
+
 void EspVideo::MonitorStream() {
     while (!monitor_stop_.load()) {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        if (monitor_stop_.load() || video_fd_ < 0) {
+        if (monitor_stop_.load()) {
+            break;
+        }
+        if (video_fd_ < 0) {
+            // A previous recovery attempt failed; retry.
+            if (camera_unplugged_.load()) {
+                RestoreDisconnectLogs();
+                if (RecoverCamera()) {
+                    camera_unplugged_ = false;
+                    camera_connected_ = true;
+                    ESP_LOGI(TAG, "Camera stream recovered");
+                } else {
+                    ESP_LOGW(TAG, "Camera recovery failed, will retry");
+                    SuppressDisconnectLogs();
+                    vTaskDelay(pdMS_TO_TICKS(5000));
+                }
+            }
             continue;
         }
+
         // The UVC device clears dev_addr on UVC_HOST_DEVICE_DISCONNECTED, which
         // makes VIDIOC_G_PARM fail. This is a cheap, non-destructive probe.
         struct v4l2_streamparm parm = {};
         parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-        if (ioctl(video_fd_, VIDIOC_G_PARM, &parm) == 0) {
-            if (!camera_connected_.exchange(true)) {
-                ESP_LOGI(TAG, "Camera connected");
-            }
-        } else {
+        if (ioctl(video_fd_, VIDIOC_G_PARM, &parm) != 0) {
             if (camera_connected_.exchange(false)) {
                 ESP_LOGW(TAG, "Camera disconnected");
+                SuppressDisconnectLogs();
             }
             camera_unplugged_ = true;
-            // The stream cannot be restarted without reopening the device, so
-            // stop probing: keeps the indicator off and avoids driver log spam.
-            break;
+            continue;
+        }
+
+        if (camera_unplugged_.load()) {
+            RestoreDisconnectLogs();
+            ESP_LOGW(TAG, "Camera re-enumerated, restarting stream");
+            if (RecoverCamera()) {
+                camera_unplugged_ = false;
+                camera_connected_ = true;
+                ESP_LOGI(TAG, "Camera stream recovered");
+            } else {
+                ESP_LOGW(TAG, "Camera recovery failed, will retry");
+                SuppressDisconnectLogs();
+                vTaskDelay(pdMS_TO_TICKS(5000));
+            }
+            continue;
+        }
+
+        if (!camera_connected_.exchange(true)) {
+            ESP_LOGI(TAG, "Camera connected");
         }
     }
 }
@@ -482,6 +600,12 @@ bool EspVideo::Capture() {
         encoder_thread_.join();
     }
 
+    // Do not touch the fd while a hot-plug recovery is reopening the device.
+    std::unique_lock<std::mutex> frame_lock(device_mutex_, std::try_to_lock);
+    if (!frame_lock.owns_lock()) {
+        ESP_LOGW(TAG, "Capture skipped: camera is restarting");
+        return false;
+    }
     if (!streaming_on_ || video_fd_ < 0 || camera_unplugged_) {
         ESP_LOGE(TAG, "Capture failed: camera unavailable (streaming_on_=%d, video_fd_=%d, unplugged=%d)",
                  static_cast<int>(streaming_on_.load()), video_fd_,
@@ -839,6 +963,7 @@ bool EspVideo::Capture() {
             ESP_LOGE(TAG, "VIDIOC_QBUF failed");
         }
     }
+    frame_lock.unlock();
 
     // 显示预览图片
     auto display = Board::GetInstance().GetDisplay();

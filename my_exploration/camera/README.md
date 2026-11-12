@@ -42,10 +42,16 @@ options.
   connected and streaming. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`,
   which the UVC driver fails with `ENODEV` once it clears the device address on
   `UVC_HOST_DEVICE_DISCONNECTED`. `Camera::IsStreaming()` requires `STREAMON` to
-  have succeeded, the probe to report connected, and no latched disconnect, so
-  unplugging the camera turns the icon off within ~1 s. After a reconnect the
-  icon stays off because this driver cannot restart the stream without reopening
-  the device (reboot to restore the camera).
+  have succeeded, the probe to report connected, and no pending reconnect, so
+  unplugging the camera turns the icon off within ~1 s.
+- **Hot-plug recovery (2026-11-13):** when the camera reappears on the USB bus,
+  the monitor stops using the old stream and reopens the device: close + munmap,
+  `esp_video_deinit()` (releases the UVC stream the driver left paused),
+  `esp_video_init()`, reopen `/dev/video40`, then the normal format/buffer setup
+  and `STREAMON`. The icon returns once that succeeds. This is best-effort: if
+  the UVC driver refuses to reinstall, recovery logs an error and retries every
+  ~6 s; a reboot remains the fallback. A `take_photo` request during recovery
+  fails fast with `Capture skipped: camera is restarting` rather than blocking.
 - During testing the camera occasionally dropped off the USB bus by itself
   (`uvc_video_get_parm: UVC device ... is not connected` in the log). The icon
   turned off as expected. If that happens repeatedly, recheck the external 5 V
@@ -441,8 +447,8 @@ yet. Server details: [../server/README.md](../server/README.md).
 |---|---|
 | `main/boards/desk-bot-01/config.json` | UVC Kconfig flags |
 | `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
-| `main/boards/common/esp_video.h` | connection probe + `IsStreaming()` for the status icon |
-| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, disconnect latch, DQBUF timeout |
+| `main/boards/common/esp_video.h` | connection probe, hot-plug reopen, `IsStreaming()` |
+| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, reopen/reinit on reconnect, DQBUF timeout |
 | `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |
 | `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera-icon state |
 | `my_exploration/.archive/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |

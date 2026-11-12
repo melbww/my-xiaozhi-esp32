@@ -4,6 +4,8 @@
 #include <lvgl.h>
 #include <atomic>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -36,6 +38,10 @@ private:
     int video_fd_ = -1;
     std::atomic<bool> streaming_on_{false};
     bool is_uvc_ = false;
+    bool is_mipi_csi_ = false;
+    std::string video_device_path_;
+    esp_video_init_usb_uvc_config_t uvc_config_ = {};
+    bool has_uvc_config_ = false;
     struct MmapBuffer {
         void* start = nullptr;
         size_t length = 0;
@@ -47,13 +53,21 @@ private:
 
     // The UVC stream stays "started" after the camera is unplugged, so probe
     // VIDIOC_G_PARM (which checks the driver's connected dev_addr) instead of
-    // trusting STREAMON. Latching a disconnect keeps the indicator honest,
-    // because the stream cannot be restarted without reopening the device.
+    // trusting STREAMON. A reconnect triggers a full device reopen, because the
+    // UVC host leaves the old stream paused and esp_video cannot restart it.
     std::thread monitor_thread_;
     std::atomic<bool> monitor_stop_{false};
     std::atomic<bool> camera_connected_{false};
     std::atomic<bool> camera_unplugged_{false};
+    std::mutex device_mutex_;
+    bool log_levels_saved_ = false;
+    esp_log_level_t usb_log_level_ = ESP_LOG_INFO;
+    esp_log_level_t video_log_level_ = ESP_LOG_INFO;
 
+    bool SetupDevice();
+    bool RecoverCamera();
+    void SuppressDisconnectLogs();
+    void RestoreDisconnectLogs();
     void StartStreamMonitor();
     void MonitorStream();
 
