@@ -482,9 +482,10 @@ bool EspVideo::Capture() {
         encoder_thread_.join();
     }
 
-    if (!streaming_on_ || video_fd_ < 0) {
-        ESP_LOGE(TAG, "Capture failed: camera did not initialize (streaming_on_=%d, video_fd_=%d)",
-                 static_cast<int>(streaming_on_.load()), video_fd_);
+    if (!streaming_on_ || video_fd_ < 0 || camera_unplugged_) {
+        ESP_LOGE(TAG, "Capture failed: camera unavailable (streaming_on_=%d, video_fd_=%d, unplugged=%d)",
+                 static_cast<int>(streaming_on_.load()), video_fd_,
+                 static_cast<int>(camera_unplugged_.load()));
         return false;
     }
 

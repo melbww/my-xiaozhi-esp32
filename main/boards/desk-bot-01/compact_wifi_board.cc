@@ -16,8 +16,6 @@
 #include <esp_lcd_panel_vendor.h>
 #include <esp_log.h>
 #include <esp_timer.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -512,7 +510,6 @@ private:
 #ifdef CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE
         // Temporary: raise the EspVideo log level so VIDIOC_ENUM_FMT dumps the formats.
         esp_log_level_set("EspVideo", ESP_LOG_DEBUG);
-        esp_log_level_set("usb_uvc_device", ESP_LOG_DEBUG);
 #endif
         esp_video_init_usb_uvc_config_t usb_uvc_config = {
             .uvc =
@@ -534,15 +531,6 @@ private:
         video_config.usb_uvc = &usb_uvc_config;
         camera_ = new EspVideo(video_config);
         ESP_LOGI(TAG, "USB UVC camera initialized");
-        // TEMP SELFTEST
-        xTaskCreate(
-            [](void* arg) {
-                vTaskDelay(pdMS_TO_TICKS(5000));
-                bool ok = static_cast<EspVideo*>(arg)->Capture();
-                ESP_LOGI(TAG, "CAMERA SELFTEST: %s", ok ? "ok" : "failed");
-                vTaskDelete(nullptr);
-            },
-            "camselftest", 8192, camera_, 5, nullptr);
 #endif
     }
 

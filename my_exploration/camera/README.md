@@ -7,7 +7,7 @@ All camera/vision findings for the Desk Bot 01 robot: the camera module, USB
 wiring/power, firmware UVC support, the vision upload path, and the server-side
 options.
 
-## Current status (2026-11-12)
+## Current status (2026-11-13)
 
 - The camera is a **4-pin USB 2.0 UVC module** (1 MP, 1280×720 / 480×320,
   YUV/MJPEG, 5 V) with a 4-wire cable ending in a **Type-C male** plug.
@@ -37,7 +37,7 @@ options.
   and then fails to open `/dev/video40`.
 - With no camera attached the board still boots normally (after the timeout),
   registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
-- **Status icon (2026-11-12):** the 128×64 OLED top bar shows a
+- **Status icon (2026-11-13):** the 128×64 OLED top bar shows a
   `photo_camera` icon immediately left of the Wi-Fi icon only while the camera is
   connected and streaming. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`,
   which the UVC driver fails with `ENODEV` once it clears the device address on
@@ -46,6 +46,11 @@ options.
   unplugging the camera turns the icon off within ~1 s. After a reconnect the
   icon stays off because this driver cannot restart the stream without reopening
   the device (reboot to restore the camera).
+- During testing the camera occasionally dropped off the USB bus by itself
+  (`uvc_video_get_parm: UVC device ... is not connected` in the log). The icon
+  turned off as expected. If that happens repeatedly, recheck the external 5 V
+  feed and the VBUS splice — the driver only clears `dev_addr` on a real
+  `DEV_GONE` event.
 - The local `xiaozhi-esp32-server` vision backend still needs a real VLLM key;
   the Mac's LAN IP is `192.168.1.6`, the robot is `192.168.1.13`.
 
@@ -414,15 +419,18 @@ yet. Server details: [../server/README.md](../server/README.md).
 - [x] Board's USB/OTG port works (device mode; `USB JTAG_serial debug unit`).
 - [x] Camera module is alive — `HD video` `0x349c:0x3307` on the Mac via an OTG
       adapter, live 1280×720 frames (2026-11-11).
-- [ ] Camera has 5 V — the OTG port does **not** supply VBUS (USB-host demo
-      still reports zero devices, both plug orientations). Power it externally.
-- [ ] USB-C female→USB-A male adapter + **powered** hub (or 5 V injected into
-      the OTG adapter's VBUS).
+- [x] Camera has 5 V — external supply spliced into the OTG cable's VBUS
+      (2026-11-11). The OTG port itself still does **not** supply VBUS.
+- [x] VBUS splice verified; a powered hub is an alternative, not required.
 - [ ] Known-good data cable; verify the 4-pin wire order.
 - [x] Mac sees it:
       `system_profiler SPUSBDataType` / `ffmpeg -f avfoundation ...`
-- [ ] ESP log has no `open /dev/video40 failed`.
-- [ ] `MCP: Add tool: self.camera.take_photo` appears.
+- [x] ESP log has no `open /dev/video40 failed` (camera enumerated,
+      `Camera init success`).
+- [x] `MCP: Add tool: self.camera.take_photo` appears.
+- [x] OLED `photo_camera` icon appears next to Wi-Fi while the camera streams
+      (`Camera indicator: on` in the log) and turns off within ~1 s when the USB
+      device disappears (2026-11-13).
 - [ ] `self.camera.take_photo` is invoked (`Call tool:` log).
 - [ ] Vision URL/token from the server matches the running backend.
 - [ ] Robot can reach the server IP/port.
