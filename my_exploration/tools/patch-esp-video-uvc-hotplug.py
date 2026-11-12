@@ -15,6 +15,12 @@ Two vendor limitations prevent a replugged UVC camera from working:
    when the camera is removed, so no new device can ever enumerate. Fix: keep
    the task running on ALL_FREE and only tear down on NO_CLIENTS.
 
+3. `esp_video_usb_uvc_device.c`'s `uvc_video_stop()` calls
+   `uvc_host_stream_stop()`/`close()` unconditionally. After patch 1 the stream
+   handle is NULL on a reconnect, so `STREAMOFF` returns an error and the
+   esp_video stream state can never be reset for a restart. Fix: skip the host
+   calls when `stream_hdl` is NULL.
+
 `managed_components/` is generated and gitignored; rerun this script after a
 clean build or component update:
 

@@ -44,21 +44,26 @@ options.
   `UVC_HOST_DEVICE_DISCONNECTED`. `Camera::IsStreaming()` requires `STREAMON` to
   have succeeded, the probe to report connected, and no pending reconnect, so
   unplugging the camera turns the icon off within ~1 s.
-- **Hot-plug recovery (2026-11-13):** when the camera reappears on the USB bus,
-  the monitor stops using the old stream and reopens the device: close + munmap,
-  `esp_video_deinit()` (releases the UVC stream the driver left paused),
-  `esp_video_init()`, reopen `/dev/video40`, then the normal format/buffer setup
-  and `STREAMON`. The icon returns once that succeeds. A `take_photo` request
-  during recovery fails fast with `Capture skipped: camera is restarting` rather
-  than blocking.
-- **Vendor patch required:** the stock `esp_video` UVC driver only pauses the
-  stream on `UVC_HOST_DEVICE_DISCONNECTED`. It never closes it, so the frame
-  stays checked out, the USB device handle stays open, and the camera cannot
-  re-enumerate after a replug. `my_exploration/tools/patch-esp-video-uvc-hotplug.py`
-  makes the disconnect callback return the held frame(s) and call
-  `uvc_host_stream_close()` (the same flow as Espressif's USB UVC example).
-  `managed_components/` is generated and gitignored — rerun the script after a
-  clean build or component update.
+- **Hot-plug recovery (2026-11-13, verified on hardware):** when the camera
+  reappears on the USB bus, the monitor restarts the existing V4L2 stream with
+  `STREAMOFF` → `STREAMON` and dequeues one frame to confirm frames actually
+  flow. It does **not** deinit/reinit `esp_video` (that path deadlocks waiting on
+  the USB-host teardown). The icon returns once the frame check passes. After
+  three consecutive failed attempts the board reboots automatically as a
+  guaranteed fallback. A `take_photo` request during recovery fails fast with
+  `Capture skipped: camera is restarting` rather than blocking.
+- **Vendor patch required (three changes):**
+  1. `esp_video_usb_uvc_device.c` / disconnect callback: return the frame(s)
+     still held by the capture buffer and call `uvc_host_stream_close()` (the
+     same flow as Espressif's USB UVC example), then clear `stream_hdl`.
+  2. `esp_video_init.c` / USB-host task: do not uninstall the USB host stack on
+     `ALL_FREE`; keep it running so a replugged device can enumerate.
+  3. `esp_video_usb_uvc_device.c` / `uvc_video_stop()`: skip the UVC host calls
+     when `stream_hdl` is already NULL, so `STREAMOFF` still resets the
+     esp_video stream state after a disconnect.
+  `my_exploration/tools/patch-esp-video-uvc-hotplug.py` applies all three
+  idempotently. `managed_components/` is generated and gitignored — rerun the
+  script after a clean build or component update.
 - During testing the camera occasionally dropped off the USB bus by itself
   (`uvc_video_get_parm: UVC device ... is not connected` in the log). The icon
   turned off as expected. If that happens repeatedly, recheck the external 5 V
@@ -428,7 +433,9 @@ yet. Server details: [../server/README.md](../server/README.md).
 ## Troubleshooting checklist
 
 - [ ] Camera on the **USB / OTG** port, not `UART / COM`.
-- [ ] Camera connected **before** boot/reset.
+- [?] Camera connected **before** boot/reset — no longer required since
+      2026-11-13: unplug/replug is detected and the stream is restarted
+      automatically. Boot-time connection still gives the fastest startup.
 - [x] Board's USB/OTG port works (device mode; `USB JTAG_serial debug unit`).
 - [x] Camera module is alive — `HD video` `0x349c:0x3307` on the Mac via an OTG
       adapter, live 1280×720 frames (2026-11-11).
@@ -444,6 +451,8 @@ yet. Server details: [../server/README.md](../server/README.md).
 - [x] OLED `photo_camera` icon appears next to Wi-Fi while the camera streams
       (`Camera indicator: on` in the log) and turns off within ~1 s when the USB
       device disappears (2026-11-13).
+- [x] Unplug/replug recovery: `Camera disconnected` → `Camera re-enumerated` →
+      `Camera stream recovered`, icon returns (2026-11-13, hardware verified).
 - [ ] `self.camera.take_photo` is invoked (`Call tool:` log).
 - [ ] Vision URL/token from the server matches the running backend.
 - [ ] Robot can reach the server IP/port.
