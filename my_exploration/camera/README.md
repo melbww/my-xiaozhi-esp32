@@ -7,7 +7,7 @@ All camera/vision findings for the Desk Bot 01 robot: the camera module, USB
 wiring/power, firmware UVC support, the vision upload path, and the server-side
 options.
 
-## Current status (2026-11-11)
+## Current status (2026-11-12)
 
 - The camera is a **4-pin USB 2.0 UVC module** (1 MP, 1280×720 / 480×320,
   YUV/MJPEG, 5 V) with a 4-wire cable ending in a **Type-C male** plug.
@@ -37,6 +37,11 @@ options.
   and then fails to open `/dev/video40`.
 - With no camera attached the board still boots normally (after the timeout),
   registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
+- **Status icon (2026-11-12):** the 128×64 OLED top bar now shows a
+  `photo_camera` icon immediately left of the Wi-Fi icon while the UVC stream is
+  running. It is driven by `Camera::IsStreaming()` (implemented by `EspVideo`
+  from `streaming_on_`), so it is visible only when the camera is enumerated and
+  actually producing frames; with no camera the icon stays hidden.
 - The local `xiaozhi-esp32-server` vision backend still needs a real VLLM key;
   the Mac's LAN IP is `192.168.1.6`, the robot is `192.168.1.13`.
 
@@ -307,14 +312,11 @@ camera_ = new EspVideo(video_config);
 ```
 
 - `GetCamera()` returns `camera_`.
-- The constructor currently has the call commented out:
-
-```cpp
-// Camera temporarily disabled: USB UVC enumeration blocks boot for up
-// to 10 seconds when no camera is attached. Re-enable this call once
-// the camera enumerates reliably.
-// InitializeCamera();
-```
+- The constructor calls `InitializeCamera()` after the display and buttons are
+  initialized. When no camera enumerates, `EspVideo` construction fails its
+  `/dev/video40` open after the 10 s timeout, `camera_` remains non-null, and
+  `IsStreaming()` stays false — so the OLED status icon stays hidden and the
+  board still boots normally.
 
 ### Boot log with camera enabled (no camera attached)
 
@@ -426,7 +428,10 @@ yet. Server details: [../server/README.md](../server/README.md).
 | File | Purpose |
 |---|---|
 | `main/boards/desk-bot-01/config.json` | UVC Kconfig flags |
-| `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` (init currently commented) |
+| `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
+| `main/boards/common/esp_video.h` | `IsStreaming()` (from `streaming_on_`) for the status icon |
+| `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |
+| `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera-icon state |
 | `my_exploration/.archive/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
 | `my_exploration/tools/serial_capture.py` | Reset + capture CH343 serial output |
 | `my_exploration/README.md` | Current project index |

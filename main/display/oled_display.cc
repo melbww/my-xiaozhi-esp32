@@ -115,6 +115,7 @@ OledDisplay::~OledDisplay() {
     }
     if (top_bar_ != nullptr) {
         network_label_ = nullptr;
+        camera_label_ = nullptr;
         mute_label_ = nullptr;
         battery_label_ = nullptr;
         lv_obj_del(top_bar_);
@@ -124,6 +125,7 @@ OledDisplay::~OledDisplay() {
             status_label_ = nullptr;
             notification_label_ = nullptr;
             network_label_ = nullptr;
+            camera_label_ = nullptr;
             mute_label_ = nullptr;
             battery_label_ = nullptr;
         }
@@ -219,7 +221,20 @@ void OledDisplay::SetupUI_128x64() {
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_scrollbar_mode(top_bar_, LV_SCROLLBAR_MODE_OFF);
 
-    network_label_ = lv_label_create(top_bar_);
+    lv_obj_t* left_icons = lv_obj_create(top_bar_);
+    lv_obj_set_size(left_icons, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(left_icons, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(left_icons, 0, 0);
+    lv_obj_set_style_pad_all(left_icons, 0, 0);
+    lv_obj_set_flex_flow(left_icons, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(left_icons, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    camera_label_ = lv_label_create(left_icons);
+    lv_label_set_text(camera_label_, "");
+    lv_obj_set_style_text_font(camera_label_, icon_font, 0);
+
+    network_label_ = lv_label_create(left_icons);
     lv_label_set_text(network_label_, "");
     lv_obj_set_style_text_font(network_label_, icon_font, 0);
 
@@ -385,6 +400,10 @@ void OledDisplay::SetupUI_128x32() {
     mute_label_ = lv_label_create(status_bar_);
     lv_label_set_text(mute_label_, "");
     lv_obj_set_style_text_font(mute_label_, icon_font, 0);
+
+    camera_label_ = lv_label_create(status_bar_);
+    lv_label_set_text(camera_label_, "");
+    lv_obj_set_style_text_font(camera_label_, icon_font, 0);
 
     network_label_ = lv_label_create(status_bar_);
     lv_label_set_text(network_label_, "");

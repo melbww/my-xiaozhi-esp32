@@ -38,6 +38,7 @@ protected:
     lv_display_t* display_ = nullptr;
 
     lv_obj_t* network_label_ = nullptr;
+    lv_obj_t* camera_label_ = nullptr;
     lv_obj_t* status_label_ = nullptr;
     lv_obj_t* notification_label_ = nullptr;
     lv_obj_t* mute_label_ = nullptr;
@@ -48,6 +49,7 @@ protected:
     const char* battery_icon_ = nullptr;
     const char* network_icon_ = nullptr;
     bool muted_ = false;
+    bool camera_active_ = false;
 
     std::chrono::system_clock::time_point last_status_update_time_;
     esp_timer_handle_t notification_timer_ = nullptr;

@@ -9,6 +9,9 @@ public:
     virtual ~Camera() = default;
 
     virtual void SetExplainUrl(const std::string& url, const std::string& token) = 0;
+    // True while the camera is producing frames. Displays use this for the
+    // status-bar camera indicator; cameras that cannot report it stay hidden.
+    virtual bool IsStreaming() const { return false; }
     virtual bool Capture() = 0;
     virtual bool SetHMirror(bool enabled) = 0;
     virtual bool SetVFlip(bool enabled) = 0;

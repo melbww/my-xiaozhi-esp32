@@ -5,7 +5,7 @@ N16R8) that was backed up, reverse-engineered, and reflashed with a custom
 `desk-bot-01` board definition in this repository. It also covers the
 self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 
-**Last verified:** 2026-11-09
+**Last verified:** 2026-11-12
 
 ## Current state
 
@@ -16,7 +16,7 @@ self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 | OTA / WebSocket | Self-hosted server, `192.168.1.6:8002` / `:8000` |
 | TTS | Local macOS `say` via `CustomTTS` (fast); Edge TTS available |
 | `digital-human` runtime | Stopped; **not part of the robot path** |
-| Camera / vision | Camera module verified on the Mac (`0x349c:0x3307`, live 1280×720); board cannot power it (no VBUS on `USB / OTG`), vision also needs a real VLLM key |
+| Camera / vision | USB UVC camera streaming on the robot (external 5 V via OTG VBUS splice); OLED camera icon added 2026-11-12 (hardware check pending); vision still needs a real VLLM key |
 | Motors / LED | Not yet verified on hardware |
 | Wi-Fi / OLED / audio | Verified in boot logs; OLED visual check pending |
 

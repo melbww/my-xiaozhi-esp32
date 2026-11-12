@@ -1,12 +1,33 @@
 # TTS, Latency, and Interruption
 
-**Last verified:** 2026-11-09
+**Last verified:** 2026-11-12
 **Server setup:** [README.md](README.md)
 **Local TTS service:** `/Users/wenwu/work/xiaozhi-esp32-server/my_explorations/local-say-tts/`
 
 ## Current configuration
 
-The agent uses `TTS_CustomTTS` + `TTS_CustomTTS0000`:
+The agent (`ESP`, id `f20677aea16a49b3a2d93ef3461bbcf5`) uses
+`TTS_CustomTTS` + the local `say` service. It was found on `TTS_EdgeTTS`
+(2026-11-12) and switched back with:
+
+```sh
+docker exec xiaozhi-esp32-server-db mysql -uroot -p123456 -e \
+  "USE xiaozhi_esp32_server; UPDATE ai_agent \
+   SET tts_model_id='TTS_CustomTTS' \
+   WHERE id='f20677aea16a49b3a2d93ef3461bbcf5';"
+```
+
+The server reads the agent on every new device session, so no restart is
+needed; the device only opens that session on the next wake word (it does not
+keep an idle WebSocket). Confirm with:
+
+```sh
+docker logs --since 2m xiaozhi-esp32-server 2>&1 | \
+  grep -E "初始化组件: tts成功|selected_module"
+```
+
+Expected: `初始化组件: tts成功 TTS_CustomTTS` and
+`"TTS": "TTS_CustomTTS"` in `selected_module`.
 
 | Item | Value |
 |---|---|

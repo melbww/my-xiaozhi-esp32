@@ -123,6 +123,9 @@ LvglDisplay::~LvglDisplay() {
     if (network_label_ != nullptr) {
         lv_obj_del(network_label_);
     }
+    if (camera_label_ != nullptr) {
+        lv_obj_del(camera_label_);
+    }
     if (notification_label_ != nullptr) {
         lv_obj_del(notification_label_);
     }
@@ -281,6 +284,15 @@ void LvglDisplay::UpdateStatusBar(bool update_all) {
                 }
             }
         }
+    }
+
+    // Update camera indicator: visible while the camera is producing frames.
+    auto camera = board.GetCamera();
+    bool camera_active = camera != nullptr && camera->IsStreaming();
+    if (camera_label_ != nullptr && camera_active_ != camera_active) {
+        DisplayLockGuard lock(this);
+        camera_active_ = camera_active;
+        lv_label_set_text(camera_label_, camera_active ? MATERIAL_SYMBOLS_PHOTO_CAMERA : "");
     }
 
     // Update network icon every 10 seconds
