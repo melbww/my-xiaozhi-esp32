@@ -19,8 +19,11 @@ What's the camera MCP look like? It seems always send to the LLM for explanation
 or other places is also fine, like on http://127.0.0.1:8007/ as per /Users/wenwu/work/xiaozhi-esp32-server/my_explorations/log-viewer/README.md, 
 
 ---
-no the timeout time to enumerate the camera is too long, can we make it much shorter like 3 sec?
+no the timeout time to enumerate the camera is too long, can we make it much shorter, or even that's needed at all?
 
+---
+
+now in the oled screen, is it possible to have camera icon to show up when the camera is plugged, and a different icon to show up when the camera is active? Or this is no longer possible given that the camera is mostly off?
 
 ---
 the icon/hot-plug feature costs almost nothing. The camera stream itself is the real power cost, and that was already running continuously before this change.

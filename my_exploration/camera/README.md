@@ -37,29 +37,36 @@ options.
   and then fails to open `/dev/video40`.
 - With no camera attached the board still boots normally (after the timeout),
   registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
-- **Status icon (2026-11-13):** the 128×64 OLED top bar shows a
-  `photo_camera` icon next to the Wi-Fi icon while the camera is producing
-  frames — for UVC that is *during a photo and its idle linger*, not
-  permanently. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`, which the UVC
-  driver fails with `ENODEV` once it clears the device address on
+- **Status icon (2026-11-13):** the 128×64 OLED top bar has a `photo_camera`
+  label next to the Wi-Fi icon, shown while the camera is producing frames — for
+  UVC that is during a photo (plus its idle linger). With the current
+  `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0` the 1 s status-bar tick never
+  lands inside that window, so the icon is effectively hidden; it was clearly
+  visible with the 10 s linger. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`,
+  which the UVC driver fails with `ENODEV` once it clears the device address on
   `UVC_HOST_DEVICE_DISCONNECTED`. `Camera::IsStreaming()` requires `STREAMON` to
   have succeeded, the probe to report connected, and no pending reconnect, so
   unplugging the camera turns the icon off within ~1 s.
 - **On-demand streaming (2026-11-13, verified on hardware):** the module runs
   hot while streaming, so the UVC stream is **no longer started at boot**.
   `Capture()` issues `STREAMON`, waits 1 s for auto-exposure to settle, takes
-  the photo and leaves the stream open for
-  `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` (default 10 s) so a follow-up
-  question reuses it; the 1 s monitor thread then issues `STREAMOFF`. A fresh
-  stream needs the full 1 s: at 500 ms the same scene came back badly
-  overexposed, at 1 s it is described correctly. The first photo after an idle
-  period therefore costs ~1.2 s (measured `Call tool` → frame), later photos
-  inside the linger are immediate, and the icon now means "camera active", not
-  "camera powered". Built-in CSI/DVP sensors are unaffected and keep streaming.
-  Verified boot/capture/idle log: `Camera init success (UVC stream stays off
-  until capture)` → `Camera connected` (probe only, no `STREAMON`) →
-  `Call tool: self.camera.take_photo` → `Explain image size=41552` →
-  `Camera idle, stopping UVC stream to save power` ~10 s after the capture.
+  the photo, and keeps the stream open for
+  `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC`; the 1 s monitor thread issues
+  `STREAMOFF` when that deadline expires. The `desk-bot-01` build sets the value
+  to **0**, so the stream closes at the monitor's next tick (measured 0.73 s
+  after the frame) and every photo pays the ~1.2 s start. The Kconfig default is
+  10 s, which lets a follow-up question reuse the already-open stream. A fresh
+  stream needs the full 1 s settle: at 500 ms the same scene came back badly
+  overexposed. With `0` the status bar's 1 s tick never lands while the stream is
+  on, so the camera icon is effectively invisible; it is only meaningful with a
+  linger of a few seconds. Built-in CSI/DVP sensors are unaffected and keep
+  streaming. Verified boot/capture/idle log: `Camera init success (UVC stream
+  stays off until capture)` → `Camera connected` (probe only, no `STREAMON`) →
+  `Call tool: self.camera.take_photo` → `Explain image size=49708` →
+  `Camera idle, stopping UVC stream to save power` right after the capture.
+  Two consecutive captures ~60 s apart were verified: each paid the ~1.3 s
+  `STREAMON` + settle and both uploads succeeded, so repeated
+  `STREAMON`/`STREAMOFF` cycles are safe.
   Note: the module's VBUS stays on (the external 5 V splice), so it is not fully
   powered down — only the sensor and USB stream go idle.
 - **Hot-plug recovery (2026-11-13, verified on hardware):** when the camera
@@ -488,11 +495,11 @@ yet. Server details: [../server/README.md](../server/README.md).
 - [x] ESP log has no `open /dev/video40 failed` (camera enumerated,
       `Camera init success`).
 - [x] `MCP: Add tool: self.camera.take_photo` appears.
-- [x] OLED `photo_camera` icon appears next to Wi-Fi while a photo is taken
-      (`Camera indicator: on` in the log) and turns off ~1 s after the USB
-      device disappears (2026-11-13). It also turns off after the 10 s idle
-      linger (`Camera idle, stopping UVC stream to save power`), verified on
-      hardware 2026-11-13.
+- [x] OLED `photo_camera` icon appears next to Wi-Fi while the camera streams and
+      turns off ~1 s after the USB device disappears (2026-11-13). With the 10 s
+      idle linger it also turned off after `Camera idle, stopping UVC stream to
+      save power`; with the current `IDLE_SEC=0` the stream window is shorter
+      than the status-bar tick, so the icon stays hidden.
 - [x] Unplug/replug recovery: `Camera disconnected` → `Camera reconnected` →
       `Camera recovered`, icon returns on the next photo (2026-11-13, hardware
       verified).

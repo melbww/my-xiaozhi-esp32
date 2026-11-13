@@ -32,7 +32,12 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="main/boards/desk-bot-01/partitions.csv"
 CONFIG_OTA_URL="http://192.168.1.6:8002/xiaozhi/ota/"
 CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y
 CONFIG_ESP_VIDEO_ENABLE_DVP_VIDEO_DEVICE=n
+CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0
 ```
+
+`CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0` closes the UVC stream as soon as a
+photo is captured; see [../camera/README.md](../camera/README.md) for the
+on-demand streaming behavior.
 
 The OTA URL points at the self-hosted manager-api. Change it if the server host
 or LAN IP changes, then rebuild and reflash.
