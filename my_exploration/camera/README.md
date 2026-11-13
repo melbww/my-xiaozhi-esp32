@@ -33,10 +33,12 @@ options.
   power the board but not a downstream device.
 - Firmware UVC support is present (`CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE`,
   `EspVideo`, `GetCamera()`). `InitializeCamera()` is now called in the board
-  constructor; without an enumerating camera `esp_video` blocks boot for ~10 s
-  and then fails to open `/dev/video40`.
-- With no camera attached the board still boots normally (after the timeout),
-  registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
+  constructor; the camera does **not** have to be attached at boot: `open()`
+  fails after `CONFIG_USB_UVC_INIT_TIMEOUT_MS` (500 ms) and the monitor retries
+  every ~2 s, so a camera plugged in later is picked up without a reboot.
+- With no camera attached the board boots normally, registers 31 MCP tools
+  (including `self.camera.take_photo`, which fails until a camera is attached)
+  and shows no camera icon.
 - **Status icons (2026-11-13, verified on hardware):** the 128×64 OLED top bar
   has a camera label next to the Wi-Fi icon with two states:
   - `MATERIAL_SYMBOLS_IMAGE` (a picture) while a camera is **present**, from
@@ -385,24 +387,29 @@ camera_ = new EspVideo(video_config);
 
 - `GetCamera()` returns `camera_`.
 - The constructor calls `InitializeCamera()` after the display and buttons are
-  initialized. When no camera enumerates, `EspVideo` construction fails its
-  `/dev/video40` open after the 10 s timeout, `camera_` remains non-null, and
-  `IsStreaming()` stays false — so the OLED status icon stays hidden and the
-  board still boots normally.
+  initialized. `open("/dev/video40")` runs the UVC init, so a camera that is
+  **absent at boot** fails that open after `CONFIG_USB_UVC_INIT_TIMEOUT_MS`
+  (500 ms on this board). `camera_` remains non-null and the status icon stays
+  hidden, but the monitor thread keeps retrying `open()` every ~2 s, so the
+  camera can be plugged in at any time afterwards — no reboot needed.
 
-### Boot log with camera enabled (no camera attached)
+### Boot log with no camera attached
 
 ```
-I (354) usb_uvc_device: Waiting for UVC device to be enumerated...
-E (10354) usb_uvc_device: uvc_video_init(266): Failed to take UVC device ready semaphore
-E (10354) EspVideo: open /dev/video40 failed, errno=19(No such device)
-I (10354) DeskBot01Board: USB UVC camera initialized
-I (10504) MCP: Add tool: self.camera.take_photo
+I (358) usb_uvc_device: Waiting for UVC device to be enumerated...
+E (858) EspVideo: open /dev/video40 failed, errno=19(No such device)
+W (1358) EspVideo: Camera not attached yet, will keep probing
+...
+I (9878) EspVideo: Camera init success (UVC stream stays off until capture)
+I (9888) EspVideo: Camera attached
+I (9918) Display: Camera indicator: connected
 ```
 
-The 10 s wait is controlled by `CONFIG_USB_UVC_INIT_TIMEOUT_MS` (default
-10000 ms, range 500–60000). If the camera is present, this wait is shorter and
-the init log ends with:
+The first open waits `CONFIG_USB_UVC_INIT_TIMEOUT_MS` (this board sets **500**,
+the range minimum is 500, component default 10000), so an absent camera costs
+half a second of boot instead of 10 s. Retries stop as soon as a device opens.
+
+With the camera present, the same wait is short and the init log ends with:
 
 ```
 I (…) EspVideo: Camera init success (UVC stream stays off until capture)
@@ -410,8 +417,8 @@ I (…) EspVideo: Camera init success (UVC stream stays off until capture)
 
 The monitor prints `Camera connected` ~1 s later (the `VIDIOC_G_PARM` probe
 succeeds without a stream), but no `STREAMON` happens at boot. The first
-`take_photo` opens the stream, and 10 s after it finishes the log shows
-`Camera idle, stopping UVC stream to save power`.
+`take_photo` opens the stream, and `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0`
+closes it again right after the capture.
 
 ### Boot log without the UVC component (reference)
 
@@ -496,9 +503,10 @@ yet. Server details: [../server/README.md](../server/README.md).
 ## Troubleshooting checklist
 
 - [ ] Camera on the **USB / OTG** port, not `UART / COM`.
-- [?] Camera connected **before** boot/reset — no longer required since
-      2026-11-13: unplug/replug is detected and the stream is restarted
-      automatically. Boot-time connection still gives the fastest startup.
+- [x] Camera connected **before** boot is not required (2026-11-13): with the
+      camera absent, boot pays only the 500 ms init timeout, then `open()` is
+      retried every ~2 s and the camera is picked up as soon as it is plugged in.
+      Boot-time connection is still the fastest path (icon at ~1 s).
 - [x] Board's USB/OTG port works (device mode; `USB JTAG_serial debug unit`).
 - [x] Camera module is alive — `HD video` `0x349c:0x3307` on the Mac via an OTG
       adapter, live 1280×720 frames (2026-11-11).

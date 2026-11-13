@@ -33,11 +33,14 @@ CONFIG_OTA_URL="http://192.168.1.6:8002/xiaozhi/ota/"
 CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y
 CONFIG_ESP_VIDEO_ENABLE_DVP_VIDEO_DEVICE=n
 CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0
+CONFIG_USB_UVC_INIT_TIMEOUT_MS=500
 ```
 
 `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0` closes the UVC stream as soon as a
-photo is captured; see [../camera/README.md](../camera/README.md) for the
-on-demand streaming behavior.
+photo is captured; `CONFIG_USB_UVC_INIT_TIMEOUT_MS=500` (the range minimum) caps
+the boot-time wait for a camera that is not attached yet. See
+[../camera/README.md](../camera/README.md) for the on-demand streaming and
+hot-plug behavior.
 
 The OTA URL points at the self-hosted manager-api. Change it if the server host
 or LAN IP changes, then rebuild and reflash.

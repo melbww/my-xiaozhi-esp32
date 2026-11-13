@@ -582,7 +582,7 @@ void EspVideo::MonitorStream() {
         }
         if (video_fd_ < 0) {
             if (is_uvc_ && --reopen_countdown <= 0) {
-                reopen_countdown = 5;
+                reopen_countdown = 2;
                 if (ReopenDevice()) {
                     RestoreDisconnectLogs();
                     camera_unplugged_ = false;

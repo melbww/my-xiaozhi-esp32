@@ -13,7 +13,7 @@
                 "CONFIG_ESP_VIDEO_ENABLE_DVP_VIDEO_DEVICE=n",
                 "CONFIG_XIAOZHI_CAMERA_ALLOW_JPEG_INPUT=y",
                 "CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0",
-                "CONFIG_USB_UVC_INIT_TIMEOUT_MS=2000",
+                "CONFIG_USB_UVC_INIT_TIMEOUT_MS=500",
                 "CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE=y"
             ]
         }
