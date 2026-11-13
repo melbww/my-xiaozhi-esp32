@@ -36,6 +36,7 @@ private:
     uint16_t sensor_height_ = 0;
 #endif  // CONFIG_XIAOZHI_ENABLE_ROTATE_CAMERA_IMAGE
     int video_fd_ = -1;
+    const char* video_device_name_ = nullptr;
     std::atomic<bool> streaming_on_{false};
     bool is_uvc_ = false;
     bool is_mipi_csi_ = false;
@@ -70,6 +71,9 @@ private:
     esp_log_level_t video_log_level_ = ESP_LOG_INFO;
 
     bool SetupDevice();
+    // Retries open() when the camera was absent at boot; open() re-runs the
+    // device init, so a camera plugged in later is picked up without a reboot.
+    bool ReopenDevice();
     // Both require device_mutex_ to be held by the caller.
     bool StartStreamLocked();
     void StopStreamLocked();

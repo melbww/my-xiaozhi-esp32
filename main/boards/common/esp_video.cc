@@ -166,12 +166,20 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
     }
 
     video_fd_ = open(video_device_name, O_RDWR);
+    video_device_name_ = video_device_name;
 
     if (video_fd_ < 0) {
         ESP_LOGE(TAG, "open %s failed, errno=%d(%s)", video_device_name, errno, strerror(errno));
 #if CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE
         log_available_video_devices();
 #endif  // CONFIG_XIAOZHI_ENABLE_CAMERA_DEBUG_MODE
+        if (is_uvc_) {
+            // open() runs the UVC init, which waits for the camera. Keep the
+            // monitor running so a camera plugged in later is picked up.
+            ESP_LOGW(TAG, "Camera not attached yet, will keep probing");
+            SuppressDisconnectLogs();
+            StartStreamMonitor();
+        }
         return;
     }
 
@@ -180,6 +188,16 @@ EspVideo::EspVideo(const esp_video_init_config_t& config) {
 }
 
 bool EspVideo::SetupDevice() {
+    if (is_uvc_) {
+        // Bound DQBUF so a photo capture fails instead of blocking forever when
+        // the camera has been unplugged. Re-applied on every (re)open.
+        struct timeval dqbuf_timeout = {};
+        dqbuf_timeout.tv_sec = 1;
+        if (ioctl(video_fd_, VIDIOC_S_DQBUF_TIMEOUT, &dqbuf_timeout) != 0) {
+            ESP_LOGW(TAG, "Failed to set DQBUF timeout");
+        }
+    }
+
     struct v4l2_capability cap = {};
     if (ioctl(video_fd_, VIDIOC_QUERYCAP, &cap) != 0) {
         ESP_LOGE(TAG, "VIDIOC_QUERYCAP failed, errno=%d(%s)", errno, strerror(errno));
@@ -422,15 +440,28 @@ void EspVideo::StartStreamMonitor() {
     if (!is_uvc_ || monitor_thread_.joinable()) {
         return;
     }
-    // Bound DQBUF so a photo capture fails instead of blocking forever when the
-    // camera has been unplugged.
-    struct timeval dqbuf_timeout = {};
-    dqbuf_timeout.tv_sec = 1;
-    if (ioctl(video_fd_, VIDIOC_S_DQBUF_TIMEOUT, &dqbuf_timeout) != 0) {
-        ESP_LOGW(TAG, "Failed to set DQBUF timeout");
-    }
     monitor_stop_ = false;
     monitor_thread_ = std::thread(&EspVideo::MonitorStream, this);
+}
+
+bool EspVideo::ReopenDevice() {
+    std::lock_guard<std::mutex> lock(device_mutex_);
+    if (video_fd_ >= 0) {
+        return true;
+    }
+    if (video_device_name_ == nullptr) {
+        return false;
+    }
+
+    // open() re-runs the device init (and waits CONFIG_USB_UVC_INIT_TIMEOUT_MS
+    // for the UVC camera), so this is what picks up a camera plugged in after
+    // boot.
+    int fd = open(video_device_name_, O_RDWR);
+    if (fd < 0) {
+        return false;
+    }
+    video_fd_ = fd;
+    return SetupDevice();
 }
 
 bool EspVideo::StartStreamLocked() {
@@ -539,30 +570,34 @@ void EspVideo::RestoreDisconnectLogs() {
 }
 
 void EspVideo::MonitorStream() {
+    // A camera can be absent when esp_video initializes, in which case the
+    // device could not be opened. Retry every few seconds: open() re-runs the
+    // UVC init, so the camera can be plugged in at any time.
+    int reopen_countdown = 0;
+
     while (!monitor_stop_.load()) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         if (monitor_stop_.load()) {
             break;
         }
         if (video_fd_ < 0) {
-            // A previous recovery attempt failed; retry.
-            if (camera_unplugged_.load()) {
-                RestoreDisconnectLogs();
-                if (RecoverCamera()) {
+            if (is_uvc_ && --reopen_countdown <= 0) {
+                reopen_countdown = 5;
+                if (ReopenDevice()) {
+                    RestoreDisconnectLogs();
                     camera_unplugged_ = false;
                     camera_connected_ = true;
-                    ESP_LOGI(TAG, "Camera stream recovered");
-                } else {
-                    ESP_LOGW(TAG, "Camera recovery failed, will retry");
-                    SuppressDisconnectLogs();
-                    vTaskDelay(pdMS_TO_TICKS(5000));
+                    recovery_attempts_ = 0;
+                    ESP_LOGI(TAG, "Camera attached");
+                    RefreshCameraIndicator();
                 }
             }
             continue;
         }
 
-        // The UVC device clears dev_addr on UVC_HOST_DEVICE_DISCONNECTED, which
-        // makes VIDIOC_G_PARM fail. This is a cheap, non-destructive probe.
+        // Cheap, non-destructive presence probe: the UVC driver checks dev_addr
+        // against the USB host's device list, so it also notices a camera that
+        // was unplugged while no stream was open.
         struct v4l2_streamparm parm = {};
         parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         if (ioctl(video_fd_, VIDIOC_G_PARM, &parm) != 0) {
