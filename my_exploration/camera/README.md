@@ -38,19 +38,39 @@ options.
 - With no camera attached the board still boots normally (after the timeout),
   registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
 - **Status icon (2026-11-13):** the 128×64 OLED top bar shows a
-  `photo_camera` icon immediately left of the Wi-Fi icon only while the camera is
-  connected and streaming. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`,
-  which the UVC driver fails with `ENODEV` once it clears the device address on
+  `photo_camera` icon next to the Wi-Fi icon while the camera is producing
+  frames — for UVC that is *during a photo and its idle linger*, not
+  permanently. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`, which the UVC
+  driver fails with `ENODEV` once it clears the device address on
   `UVC_HOST_DEVICE_DISCONNECTED`. `Camera::IsStreaming()` requires `STREAMON` to
   have succeeded, the probe to report connected, and no pending reconnect, so
   unplugging the camera turns the icon off within ~1 s.
+- **On-demand streaming (2026-11-13, verified on hardware):** the module runs
+  hot while streaming, so the UVC stream is **no longer started at boot**.
+  `Capture()` issues `STREAMON`, waits 1 s for auto-exposure to settle, takes
+  the photo and leaves the stream open for
+  `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` (default 10 s) so a follow-up
+  question reuses it; the 1 s monitor thread then issues `STREAMOFF`. A fresh
+  stream needs the full 1 s: at 500 ms the same scene came back badly
+  overexposed, at 1 s it is described correctly. The first photo after an idle
+  period therefore costs ~1.2 s (measured `Call tool` → frame), later photos
+  inside the linger are immediate, and the icon now means "camera active", not
+  "camera powered". Built-in CSI/DVP sensors are unaffected and keep streaming.
+  Verified boot/capture/idle log: `Camera init success (UVC stream stays off
+  until capture)` → `Camera connected` (probe only, no `STREAMON`) →
+  `Call tool: self.camera.take_photo` → `Explain image size=41552` →
+  `Camera idle, stopping UVC stream to save power` ~10 s after the capture.
+  Note: the module's VBUS stays on (the external 5 V splice), so it is not fully
+  powered down — only the sensor and USB stream go idle.
 - **Hot-plug recovery (2026-11-13, verified on hardware):** when the camera
-  reappears on the USB bus, the monitor restarts the existing V4L2 stream with
-  `STREAMOFF` → `STREAMON` and dequeues one frame to confirm frames actually
-  flow. It does **not** deinit/reinit `esp_video` (that path deadlocks waiting on
-  the USB-host teardown). The icon returns once the frame check passes. After
-  three consecutive failed attempts the board reboots automatically as a
-  guaranteed fallback. A `take_photo` request during recovery fails fast with
+  reappears, the monitor resets the V4L2 stream state left behind by the
+  disconnect and restarts the stream (`STREAMOFF` → `STREAMON` plus a one-frame
+  check) only if a photo was in flight. While idle it just marks the camera
+  connected; the next `take_photo` opens a fresh stream. It does **not**
+  deinit/reinit `esp_video` (that path deadlocks waiting on the USB-host
+  teardown). After three consecutive failed attempts the board reboots
+  automatically as a guaranteed fallback. A `take_photo` during recovery waits
+  up to ~1 s for the capture lock and then fails with
   `Capture skipped: camera is restarting` rather than blocking.
 - **Vendor patch required (three changes):**
   1. `esp_video_usb_uvc_device.c` / disconnect callback: return the frame(s)
@@ -69,8 +89,10 @@ options.
   turned off as expected. If that happens repeatedly, recheck the external 5 V
   feed and the VBUS splice — the driver only clears `dev_addr` on a real
   `DEV_GONE` event.
-- The local `xiaozhi-esp32-server` vision backend still needs a real VLLM key;
-  the Mac's LAN IP is `192.168.1.6`, the robot is `192.168.1.13`.
+- Vision is **working end-to-end (2026-11-13)**: `take_photo` → JPEG upload →
+  the model's description came back through the self-hosted stack, so the
+  configured vision backend/key is valid. The Mac's LAN IP is `192.168.1.6`, the
+  robot `192.168.1.13`.
 
 ## Camera module
 
@@ -356,9 +378,19 @@ I (10504) MCP: Add tool: self.camera.take_photo
 ```
 
 The 10 s wait is controlled by `CONFIG_USB_UVC_INIT_TIMEOUT_MS` (default
-10000 ms, range 500–60000). If the camera is present, this wait is shorter.
+10000 ms, range 500–60000). If the camera is present, this wait is shorter and
+the init log ends with:
 
-### Boot log with camera disabled (current)
+```
+I (…) EspVideo: Camera init success (UVC stream stays off until capture)
+```
+
+The monitor prints `Camera connected` ~1 s later (the `VIDIOC_G_PARM` probe
+succeeds without a stream), but no `STREAMON` happens at boot. The first
+`take_photo` opens the stream, and 10 s after it finishes the log shows
+`Camera idle, stopping UVC stream to save power`.
+
+### Boot log without the UVC component (reference)
 
 ```
 I (508) MCP: 30 tools registered: 23 visible to the model, 7 user-only
@@ -368,20 +400,28 @@ I (6958) Application: Activation done
 
 No `usb_uvc_device`, `EspVideo`, or `self.camera.take_photo`.
 
-### Re-enabling
+### Rebuild and reflash
 
-1. Uncomment `InitializeCamera();` in the board constructor.
-2. Build and flash the app:
-   ```sh
-   python3 scripts/build.py desk-bot-01 --name desk-bot-01
-   esptool --chip esp32s3 -p /dev/cu.usbmodem... -b 230400 \
-     write-flash 0x20000 build/xiaozhi.bin
-   ```
-3. Connect the camera **before** booting.
-4. Check the log for no `open /dev/video40 failed` and for
-   `MCP: Add tool: self.camera.take_photo`.
-5. Optional: lower `CONFIG_USB_UVC_INIT_TIMEOUT_MS` (e.g. 3000–5000) in
-   `sdkconfig_append` to shorten the no-camera boot delay.
+```sh
+cd /Users/wenwu/work/my-xiaozhi-esp32
+. /Users/wenwu/esp/esp-idf/export.sh
+python3 scripts/build.py desk-bot-01 --name desk-bot-01
+/Users/wenwu/.espressif/python_env/idf6.1_py3.14_env/bin/python3 -m esptool \
+  --chip esp32s3 -p /dev/cu.usbmodem5D300345091 -b 230400 \
+  --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-size 16MB --flash-freq 80m \
+  0x0 build/bootloader/bootloader.bin \
+  0x8000 build/partition_table/partition-table.bin \
+  0xd000 build/ota_data_initial.bin \
+  0x20000 build/xiaozhi.bin \
+  0x801000 build/generated_assets.bin
+```
+
+Check the log for no `open /dev/video40 failed` and for
+`MCP: Add tool: self.camera.take_photo`. The camera no longer has to be connected
+before boot (hot-plug is detected), but boot-time connection avoids the 10 s
+`CONFIG_USB_UVC_INIT_TIMEOUT_MS` wait. Lowering that timeout (e.g. 3000–5000) in
+`sdkconfig_append` shortens the no-camera boot delay.
 
 ## Vision pipeline
 
@@ -448,23 +488,29 @@ yet. Server details: [../server/README.md](../server/README.md).
 - [x] ESP log has no `open /dev/video40 failed` (camera enumerated,
       `Camera init success`).
 - [x] `MCP: Add tool: self.camera.take_photo` appears.
-- [x] OLED `photo_camera` icon appears next to Wi-Fi while the camera streams
-      (`Camera indicator: on` in the log) and turns off within ~1 s when the USB
-      device disappears (2026-11-13).
-- [x] Unplug/replug recovery: `Camera disconnected` → `Camera re-enumerated` →
-      `Camera stream recovered`, icon returns (2026-11-13, hardware verified).
-- [ ] `self.camera.take_photo` is invoked (`Call tool:` log).
-- [ ] Vision URL/token from the server matches the running backend.
-- [ ] Robot can reach the server IP/port.
+- [x] OLED `photo_camera` icon appears next to Wi-Fi while a photo is taken
+      (`Camera indicator: on` in the log) and turns off ~1 s after the USB
+      device disappears (2026-11-13). It also turns off after the 10 s idle
+      linger (`Camera idle, stopping UVC stream to save power`), verified on
+      hardware 2026-11-13.
+- [x] Unplug/replug recovery: `Camera disconnected` → `Camera reconnected` →
+      `Camera recovered`, icon returns on the next photo (2026-11-13, hardware
+      verified).
+- [x] `self.camera.take_photo` is invoked (`MCP: Call tool:
+      self.camera.take_photo`, 2026-11-13).
+- [x] Vision URL/token from the server is valid (the model described the
+      captured photo, 2026-11-13).
+- [x] Robot can reach the server IP/port.
 
 ## Files and commits
 
 | File | Purpose |
 |---|---|
 | `main/boards/desk-bot-01/config.json` | UVC Kconfig flags |
+| `main/Kconfig.projbuild` | `XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` (idle linger before `STREAMOFF`) |
 | `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
-| `main/boards/common/esp_video.h` | connection probe, hot-plug reopen, `IsStreaming()` |
-| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, reopen/reinit on reconnect, DQBUF timeout |
+| `main/boards/common/esp_video.h` | connection probe, hot-plug reopen, on-demand stream, `IsStreaming()` |
+| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, on-demand `STREAMON`/`STREAMOFF`, reopen on reconnect, DQBUF timeout |
 | `my_exploration/tools/patch-esp-video-uvc-hotplug.py` | reapply the vendor UVC disconnect fix after component sync |
 | `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |
 | `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera-icon state |
@@ -478,31 +524,10 @@ Commit `feffbfb` contains the camera changes and the product screenshots.
 
 ## Next steps
 
-1. **Give the camera 5 V.** The USB/OTG port cannot power it (verified twice with
-   the `usb_camera_mic_spk` demo; the module itself is confirmed good on the
-   Mac).
-   - Cheapest: USB-A **powered** hub + the OTG cable into the board's USB/OTG
-     port, camera on a `USB-C female → USB-A male` adapter on the hub.
-   - Or inject 5 V from the board's 5 V header pin into the OTG adapter's VBUS
-     (share GND).
-   - Alternative: 4-pin pigtail from the camera connector to the board header:
-     `5V → 5V`, `GND → GND`, `D+ → GPIO20`, `D− → GPIO19`. Verify the module
-     wire order (red 5 V, black GND, green D+, white D−) before applying power.
-2. Restore the robot firmware (the demo is flashed right now):
-   ```sh
-   esptool --chip esp32s3 -p /dev/cu.usbmodem5D300345091 -b 460800 \
-     write-flash 0x0 build/bootloader/bootloader.bin \
-     0x8000 build/partition_table/partition-table.bin \
-     0x20000 build/xiaozhi.bin
-   ```
-   Only re-flash the demo (`~/esp-iot-solution/examples/usb/host/usb_camera_mic_spk`,
-   app at `0x10000`) when testing new camera wiring; keep the NVS backup in
-   `.archive/camera/backup/` in mind if Wi-Fi provisioning is lost.
-3. Re-enable `InitializeCamera()`, rebuild/flash, and confirm `self.camera.take_photo`.
-4. Decide on the vision backend:
-   - official server (already configured), or
-   - local `xiaozhi-esp32-server` with a VLLM + `server.vision_explain`.
-5. Test: “what do you see?” and check `Call tool: self.camera.take_photo` plus the
-   `EspVideo` upload log.
-6. If the camera only exposes MJPEG or 1280×720 is too heavy, add MJPEG support or
-   force a lower resolution.
+1. Measure the power difference: with the stream idle the module should stay
+   noticeably cooler. Compare a boot-idle period against a `take_photo` plus
+   10 s of streaming.
+2. Tune `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` if 10 s of linger is too
+   much (set `0` to close the stream as soon as a photo is captured).
+3. If 1280×720 MJPEG is too heavy for the USB link, force a lower resolution
+   (`VIDIOC_S_FMT` in `EspVideo::SetupDevice`).

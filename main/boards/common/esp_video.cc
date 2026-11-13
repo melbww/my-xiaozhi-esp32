@@ -59,6 +59,13 @@
 
 #define TAG "EspVideo"
 
+// A UVC module is powered and streaming only while a photo is being taken, plus
+// a short linger so a follow-up question reuses the open stream.
+static constexpr uint32_t kStreamIdleTimeoutMs = CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC * 1000;
+// A freshly opened UVC stream needs about a second for auto-exposure to settle;
+// frames captured earlier than this come out noticeably brighter.
+static constexpr uint32_t kStreamStartSettleMs = 1000;
+
 #if CONFIG_XIAOZHI_CAMERA_MIRROR_CONFIGURED
 #if CONFIG_XIAOZHI_CAMERA_HMIRROR
 static constexpr bool kConfiguredHMirror = true;
@@ -356,6 +363,15 @@ bool EspVideo::SetupDevice() {
         }
     }
 
+    if (is_uvc_) {
+        // Buffers are already queued, so the first Capture() can start the
+        // stream immediately. Keeping a UVC module idle saves its sensor and
+        // USB traffic power; built-in CSI/DVP sensors keep streaming.
+        ESP_LOGI(TAG, "Camera init success (UVC stream stays off until capture)");
+        StartStreamMonitor();
+        return true;
+    }
+
     int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(video_fd_, VIDIOC_STREAMON, &type) != 0) {
         ESP_LOGE(TAG, "VIDIOC_STREAMON failed");
@@ -417,13 +433,41 @@ void EspVideo::StartStreamMonitor() {
     monitor_thread_ = std::thread(&EspVideo::MonitorStream, this);
 }
 
+bool EspVideo::StartStreamLocked() {
+    if (video_fd_ < 0) {
+        return false;
+    }
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (ioctl(video_fd_, VIDIOC_STREAMON, &type) != 0) {
+        ESP_LOGW(TAG, "STREAMON failed: %d(%s)", errno, strerror(errno));
+        return false;
+    }
+    streaming_on_ = true;
+    return true;
+}
+
+void EspVideo::StopStreamLocked() {
+    if (video_fd_ < 0) {
+        return;
+    }
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (ioctl(video_fd_, VIDIOC_STREAMOFF, &type) != 0 && errno != EBUSY && errno != ENODEV) {
+        ESP_LOGW(TAG, "STREAMOFF failed: %d(%s)", errno, strerror(errno));
+    }
+    // EBUSY means the driver already considers the stream stopped; ENODEV means
+    // the device vanished and nothing is running. Either way, stop tracking it.
+    streaming_on_ = false;
+}
+
 bool EspVideo::RecoverCamera() {
     std::lock_guard<std::mutex> lock(device_mutex_);
-    ESP_LOGW(TAG, "Restarting UVC stream on reconnected camera");
+    if (video_fd_ < 0) {
+        return false;
+    }
 
     // The disconnect callback closed the old UVC stream, so STREAMOFF only
-    // resets the esp_video stream state and STREAMON opens a fresh UVC stream
-    // against the re-enumerated device.
+    // resets the esp_video stream state (queued/done lists and buffers) that
+    // was left behind when the device went away.
     int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(video_fd_, VIDIOC_STREAMOFF, &type) != 0) {
         // EBUSY = esp_video reports ESP_ERR_INVALID_STATE: already stopped.
@@ -432,6 +476,15 @@ bool EspVideo::RecoverCamera() {
             return false;
         }
     }
+    streaming_on_ = false;
+
+    if (!stream_wanted_.load()) {
+        // Idle: the state is reset, and the next capture opens a fresh stream.
+        ESP_LOGI(TAG, "Camera re-enumerated while idle, stream stays off");
+        return true;
+    }
+
+    ESP_LOGW(TAG, "Restarting UVC stream on reconnected camera");
     if (ioctl(video_fd_, VIDIOC_STREAMON, &type) != 0) {
         ESP_LOGW(TAG, "STREAMON failed: %d(%s)", errno, strerror(errno));
         return false;
@@ -506,17 +559,22 @@ void EspVideo::MonitorStream() {
                 SuppressDisconnectLogs();
             }
             camera_unplugged_ = true;
+            // No photo can succeed now, so do not reopen the stream on
+            // reconnect unless the user asks for a new capture.
+            stream_wanted_ = false;
+            stream_idle_deadline_ = 0;
+            streaming_on_ = false;
             continue;
         }
 
         if (camera_unplugged_.load()) {
             RestoreDisconnectLogs();
-            ESP_LOGW(TAG, "Camera re-enumerated, restarting stream");
             if (RecoverCamera()) {
                 recovery_attempts_ = 0;
                 camera_unplugged_ = false;
                 camera_connected_ = true;
-                ESP_LOGI(TAG, "Camera stream recovered");
+                ESP_LOGI(TAG, "Camera recovered%s",
+                         streaming_on_.load() ? ", stream restarted" : ", stream idle");
             } else {
                 recovery_attempts_++;
                 if (recovery_attempts_ >= 3) {
@@ -533,6 +591,24 @@ void EspVideo::MonitorStream() {
 
         if (!camera_connected_.exchange(true)) {
             ESP_LOGI(TAG, "Camera connected");
+        }
+
+        // Stop the UVC stream once no capture has needed it for a while. The
+        // deadline is re-checked under the mutex so a capture that just started
+        // (and refreshed it) is never interrupted.
+        if (is_uvc_ && streaming_on_.load()) {
+            TickType_t now = xTaskGetTickCount();
+            TickType_t deadline = stream_idle_deadline_.load();
+            if (deadline != 0 && static_cast<int32_t>(now - deadline) >= 0) {
+                std::unique_lock<std::mutex> lock(device_mutex_, std::try_to_lock);
+                if (lock.owns_lock() && streaming_on_.load() &&
+                    stream_idle_deadline_.load() == deadline) {
+                    ESP_LOGI(TAG, "Camera idle, stopping UVC stream to save power");
+                    stream_wanted_ = false;
+                    stream_idle_deadline_ = 0;
+                    StopStreamLocked();
+                }
+            }
         }
     }
 }
@@ -565,10 +641,10 @@ void EspVideo::SetExplainUrl(const std::string& url, const std::string& token) {
 }
 
 bool EspVideo::IsStreaming() const {
-    // A UVC camera can be unplugged without STREAMON being cleared, so also
-    // require the device to still be connected. A camera that never enumerated
-    // keeps streaming_on_ false, and the unplug latch stops the icon from
-    // reappearing after a reconnect that the stream did not survive.
+    // True only while frames are actually flowing: for UVC that is during a
+    // capture and its idle linger, so the status-bar icon reads as "camera
+    // active" instead of "camera powered". A UVC camera can be unplugged without
+    // STREAMON being cleared, so also require the device to still be connected.
     if (!streaming_on_.load()) {
         return false;
     }
@@ -583,18 +659,40 @@ bool EspVideo::Capture() {
         encoder_thread_.join();
     }
 
-    // Do not touch the fd while a hot-plug recovery is reopening the device.
-    std::unique_lock<std::mutex> frame_lock(device_mutex_, std::try_to_lock);
+    // The stream monitor may hold the lock briefly to stop an idle stream or to
+    // reopen a reconnected camera; retry instead of failing the photo for that.
+    std::unique_lock<std::mutex> frame_lock(device_mutex_, std::defer_lock);
+    for (int attempt = 0; attempt < 20 && !frame_lock.try_lock(); attempt++) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
     if (!frame_lock.owns_lock()) {
         ESP_LOGW(TAG, "Capture skipped: camera is restarting");
         return false;
     }
-    if (!streaming_on_ || video_fd_ < 0 || camera_unplugged_) {
-        ESP_LOGE(TAG, "Capture failed: camera unavailable (streaming_on_=%d, video_fd_=%d, unplugged=%d)",
-                 static_cast<int>(streaming_on_.load()), video_fd_,
+    if (video_fd_ < 0 || camera_unplugged_) {
+        ESP_LOGE(TAG, "Capture failed: camera unavailable (video_fd_=%d, unplugged=%d)", video_fd_,
                  static_cast<int>(camera_unplugged_.load()));
         return false;
     }
+
+    if (!streaming_on_.load()) {
+        if (!is_uvc_) {
+            ESP_LOGE(TAG, "Capture failed: camera is not streaming");
+            return false;
+        }
+        // UVC power saving: the stream is opened only for a capture.
+        if (!StartStreamLocked()) {
+            ESP_LOGE(TAG, "Capture failed: cannot start camera stream");
+            return false;
+        }
+        // The first frames of a freshly opened stream are often badly exposed.
+        vTaskDelay(pdMS_TO_TICKS(kStreamStartSettleMs));
+    }
+
+    // Keep the stream open while the photo is taken and uploaded, then let the
+    // monitor close it once the linger expires.
+    stream_wanted_ = true;
+    stream_idle_deadline_ = xTaskGetTickCount() + pdMS_TO_TICKS(kStreamIdleTimeoutMs);
 
     for (int i = 0; i < 3; i++) {
         struct v4l2_buffer buf = {};
@@ -946,6 +1044,8 @@ bool EspVideo::Capture() {
             ESP_LOGE(TAG, "VIDIOC_QBUF failed");
         }
     }
+    // Restart the linger from the end of the capture, not its start.
+    stream_idle_deadline_ = xTaskGetTickCount() + pdMS_TO_TICKS(kStreamIdleTimeoutMs);
     frame_lock.unlock();
 
     // 显示预览图片

@@ -48,10 +48,17 @@ private:
     std::string explain_token_;
     std::thread encoder_thread_;
 
+    // A streaming UVC module is a significant power load, so the stream is
+    // opened on demand for a photo and closed again after a short idle linger.
+    // stream_wanted_ is true while a capture (or its linger) still needs the
+    // stream; stream_idle_deadline_ is the tick at which the monitor stops it.
+    std::atomic<bool> stream_wanted_{false};
+    std::atomic<TickType_t> stream_idle_deadline_{0};
+
     // The UVC stream stays "started" after the camera is unplugged, so probe
     // VIDIOC_G_PARM (which checks the driver's connected dev_addr) instead of
-    // trusting STREAMON. A reconnect triggers a full device reopen, because the
-    // UVC host leaves the old stream paused and esp_video cannot restart it.
+    // trusting STREAMON. A reconnect also runs STREAMOFF to reset the esp_video
+    // state, because the UVC host already closed the old stream.
     std::thread monitor_thread_;
     std::atomic<bool> monitor_stop_{false};
     std::atomic<bool> camera_connected_{false};
@@ -63,6 +70,9 @@ private:
     esp_log_level_t video_log_level_ = ESP_LOG_INFO;
 
     bool SetupDevice();
+    // Both require device_mutex_ to be held by the caller.
+    bool StartStreamLocked();
+    void StopStreamLocked();
     bool RecoverCamera();
     void SuppressDisconnectLogs();
     void RestoreDisconnectLogs();

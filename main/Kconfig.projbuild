@@ -1147,6 +1147,19 @@ menu "Camera Configuration"
         help
             Flip the captured camera image across the horizontal axis.
 
+    config XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC
+        int "UVC stream idle timeout (seconds)"
+        default 10
+        range 0 600
+        help
+            A USB UVC camera is a significant power load, so its stream is
+            opened only while a photo is taken. The stream is closed again once
+            no capture has needed it for this many seconds, so a follow-up
+            question reuses the already-open stream.
+
+            Set to 0 to close the stream immediately after each photo. Only UVC
+            cameras are affected; built-in CSI/DVP sensors keep streaming.
+
     config XIAOZHI_CAMERA_ALLOW_JPEG_INPUT
         bool "Allow JPEG Input"
         default n

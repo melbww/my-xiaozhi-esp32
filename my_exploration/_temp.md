@@ -20,3 +20,20 @@ or other places is also fine, like on http://127.0.0.1:8007/ as per /Users/wenwu
 
 ---
 no the timeout time to enumerate the camera is too long, can we make it much shorter like 3 sec?
+
+
+---
+the icon/hot-plug feature costs almost nothing. The camera stream itself is the real power cost, and that was already running continuously before this change.
+What the feature actually does per second:
+- One monitor thread wake, one VIDIOC_G_PARM ioctl, then back to sleep.
+- G_PARM is a local V4L2 state check (it looks at the driver's dev_addr); it does not touch the USB bus, so it adds no USB traffic and no camera activity.
+- Runtime RAM cost: one thread with the default pthread stack, ~3 KB internal RAM.
+- CPU cost: a few microseconds once per second. Power-management is disabled in this build (CONFIG_PM_ENABLE off), so there is no sleep-state penalty either.
+The icon update itself is just one LVGL label text change when the state changes, on a status bar that already refreshes once per second for the clock/network.
+What does draw power:
+- The UVC camera is put into STREAMON at boot and stays streaming (1280×720 MJPEG) the whole time — that was already true before the icon work. The camera module plus USB host/JPEG traffic is the dominant extra load, not the probe.
+- Wi-Fi and the audio codec/wake-word engine are still the bigger consumers overall.
+If you want to reduce power, the meaningful option is different: keep the UVC stream stopped when idle and start it only for take_photo. That would save camera power, but then the icon should become a “camera capturing” indicator rather than a continuous “camera live” indicator, and each photo request pays a stream-start delay. Say the word if you want that variant.
+
+
+let's do this to reduce power consumption
