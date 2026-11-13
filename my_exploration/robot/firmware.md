@@ -1,6 +1,6 @@
 # Desk Bot 01 — Firmware Build, Flash, and Recovery
 
-**Last verified:** 2026-11-08
+**Last verified:** 2026-11-13
 **Hardware details:** [hardware.md](hardware.md)
 **Server:** [../server/README.md](../server/README.md)
 
@@ -203,6 +203,43 @@ uvx --from esptool esptool --chip esp32s3 \
   -p /dev/cu.usbmodem5D300345091 -b 230400 \
   write-flash 0x0 backups/esp32s3-16mb-1c29043ece50-2026-11-04.bin
 ```
+
+## Troubleshooting: boot loop or instant panic
+
+Symptoms (seen 2026-11-13):
+
+- ROM boot loop: `Checksum failure. Calculated 0x45 stored 0xe1` / `ets_main.c 329`,
+  with `rst:0x10 (RTCWDT_RTC_RST)` or `rst:0x7 (TG0WDT_SYS_RST)`. The bootloader in
+  flash no longer matches its checksum.
+- After fixing the bootloader, the app may panic at startup: `LoadProhibited`,
+  `EXCVADDR: 0x0000000d`, registers full of `0x5a5a5a5a`/`0xa5a5a5a5`, and a backtrace
+  that resolves to code impossible for that path (e.g. `AudioService::...` inside `nvs_open`).
+
+Cause: single-bit corruption of flash contents (this incident: 128 bytes in the 2.6 MB
+app, 3 bytes in the 16 KB bootloader). It is **not** a source regression — the ELF and
+backtrace do not match what ran. Partition table, assets, NVS, and `id` were intact.
+
+Diagnose by reading back and diffing against the build output, then reflash:
+
+```sh
+ESPTOOL="/Users/wenwu/.espressif/python_env/idf6.1_py3.14_env/bin/python3 -m esptool \
+  --chip esp32s3 -p /dev/cu.usbmodem5D300345091 -b 230400 \
+  --before default-reset --after hard-reset"
+$ESPTOOL read-flash 0x0 0x40a0 /tmp/boot.bin
+$ESPTOOL read-flash 0x20000 0x282000 /tmp/app.bin
+cmp /tmp/boot.bin build/bootloader/bootloader.bin
+cmp -n "$(stat -f%z build/xiaozhi.bin)" /tmp/app.bin build/xiaozhi.bin
+```
+
+Reflash with the commands above; `esptool` prints `Hash of data verified` per write, and a
+fresh readback must diff to zero. Then confirm the boot log reaches `Startup wake word hint`.
+
+Notes:
+
+- Stay at `-b 230400`. At `-b 921600` this CH343 link failed mid-read with
+  `Corrupt data, expected 0x1000 bytes but received 0xfbb`; 230400 is repeatable.
+- If corruption returns after a verified reflash, suspect flash chip or board power.
+- Camera HTTP 500 `Capture failed (is the camera plugged in?)` just means no UVC camera.
 
 ## Do not do
 
