@@ -286,14 +286,32 @@ void LvglDisplay::UpdateStatusBar(bool update_all) {
         }
     }
 
-    // Update camera indicator: visible while the camera is producing frames.
+    // Update camera indicator: a picture icon while a camera is present, and a
+    // photo-camera icon while it is actually capturing frames (on-demand UVC
+    // streams are only live during a capture).
     auto camera = board.GetCamera();
-    bool camera_active = camera != nullptr && camera->IsStreaming();
-    if (camera_label_ != nullptr && camera_active_ != camera_active) {
+    auto indicator = CameraIndicator::kNone;
+    if (camera != nullptr) {
+        if (camera->IsStreaming()) {
+            indicator = CameraIndicator::kCapturing;
+        } else if (camera->IsConnected()) {
+            indicator = CameraIndicator::kConnected;
+        }
+    }
+    if (camera_label_ != nullptr && camera_indicator_ != indicator) {
         DisplayLockGuard lock(this);
-        camera_active_ = camera_active;
-        ESP_LOGI(TAG, "Camera indicator: %s", camera_active ? "on" : "off");
-        lv_label_set_text(camera_label_, camera_active ? MATERIAL_SYMBOLS_PHOTO_CAMERA : "");
+        camera_indicator_ = indicator;
+        const char* icon = "";
+        const char* state = "off";
+        if (indicator == CameraIndicator::kCapturing) {
+            icon = MATERIAL_SYMBOLS_PHOTO_CAMERA;
+            state = "capturing";
+        } else if (indicator == CameraIndicator::kConnected) {
+            icon = MATERIAL_SYMBOLS_IMAGE;
+            state = "connected";
+        }
+        ESP_LOGI(TAG, "Camera indicator: %s", state);
+        lv_label_set_text(camera_label_, icon);
     }
 
     // Update network icon every 10 seconds

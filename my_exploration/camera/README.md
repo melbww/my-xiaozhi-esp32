@@ -37,16 +37,26 @@ options.
   and then fails to open `/dev/video40`.
 - With no camera attached the board still boots normally (after the timeout),
   registers 30 MCP tools, and does **not** expose `self.camera.take_photo`.
-- **Status icon (2026-11-13):** the 128×64 OLED top bar has a `photo_camera`
-  label next to the Wi-Fi icon, shown while the camera is producing frames — for
-  UVC that is during a photo (plus its idle linger). With the current
-  `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0` the 1 s status-bar tick never
-  lands inside that window, so the icon is effectively hidden; it was clearly
-  visible with the 10 s linger. `EspVideo` runs a 1 s probe using `VIDIOC_G_PARM`,
-  which the UVC driver fails with `ENODEV` once it clears the device address on
-  `UVC_HOST_DEVICE_DISCONNECTED`. `Camera::IsStreaming()` requires `STREAMON` to
-  have succeeded, the probe to report connected, and no pending reconnect, so
-  unplugging the camera turns the icon off within ~1 s.
+- **Status icons (2026-11-13, verified on hardware):** the 128×64 OLED top bar
+  has a camera label next to the Wi-Fi icon with two states:
+  - `MATERIAL_SYMBOLS_IMAGE` (a picture) while a camera is **present**, from
+    `Camera::IsConnected()`. This is the `VIDIOC_G_PARM` probe, which stays valid
+    while the stream is closed, so the icon shows the whole time the module is
+    plugged in.
+  - `MATERIAL_SYMBOLS_PHOTO_CAMERA` while it is **capturing**, from
+    `Camera::IsStreaming()`. The icon font has no `videocam` glyph, hence the
+    picture icon for "present".
+
+  The UVC host only reports a disconnect to a stream that is open, so with the
+  stream closed an unplug would go unnoticed. `VIDIOC_G_PARM` therefore verifies
+  `dev_addr` against the USB host's device list (hot-plug patch 4) and resets the
+  device state when it is gone, which also lets the reconnect handler adopt the
+  replugged camera. Unplugging turns the icon off within ~1 s and replugging
+  brings it back. `EspVideo` calls `UpdateStatusBar(true)` right after
+  `STREAMON`/`STREAMOFF` and on unplug/replug: the 1 s status-bar tick can be
+  starved for tens of seconds while the robot is in a conversation (the
+  `SystemInfo` tick logs show 30 s gaps), which otherwise skipped the ~2 s
+  "capturing" window entirely.
 - **On-demand streaming (2026-11-13, verified on hardware):** the module runs
   hot while streaming, so the UVC stream is **no longer started at boot**.
   `Capture()` issues `STREAMON`, waits 1 s for auto-exposure to settle, takes
@@ -57,11 +67,11 @@ options.
   after the frame) and every photo pays the ~1.2 s start. The Kconfig default is
   10 s, which lets a follow-up question reuse the already-open stream. A fresh
   stream needs the full 1 s settle: at 500 ms the same scene came back badly
-  overexposed. With `0` the status bar's 1 s tick never lands while the stream is
-  on, so the camera icon is effectively invisible; it is only meaningful with a
-  linger of a few seconds. Built-in CSI/DVP sensors are unaffected and keep
-  streaming. Verified boot/capture/idle log: `Camera init success (UVC stream
-  stays off until capture)` → `Camera connected` (probe only, no `STREAMON`) →
+  overexposed. The "capturing" icon still shows with `0` because the stream is
+  pushed to the display on `STREAMON`/`STREAMOFF` (see the status-icon item).
+  Built-in CSI/DVP sensors are unaffected and keep streaming. Verified
+  boot/capture/idle log: `Camera init success (UVC stream stays off until
+  capture)` → `Camera connected` (probe only, no `STREAMON`) →
   `Call tool: self.camera.take_photo` → `Explain image size=49708` →
   `Camera idle, stopping UVC stream to save power` right after the capture.
   Two consecutive captures ~60 s apart were verified: each paid the ~1.3 s
@@ -69,17 +79,18 @@ options.
   `STREAMON`/`STREAMOFF` cycles are safe.
   Note: the module's VBUS stays on (the external 5 V splice), so it is not fully
   powered down — only the sensor and USB stream go idle.
-- **Hot-plug recovery (2026-11-13, verified on hardware):** when the camera
-  reappears, the monitor resets the V4L2 stream state left behind by the
-  disconnect and restarts the stream (`STREAMOFF` → `STREAMON` plus a one-frame
-  check) only if a photo was in flight. While idle it just marks the camera
-  connected; the next `take_photo` opens a fresh stream. It does **not**
-  deinit/reinit `esp_video` (that path deadlocks waiting on the USB-host
-  teardown). After three consecutive failed attempts the board reboots
+- **Hot-plug recovery (2026-11-13, verified on hardware):** an unplug is noticed
+  within ~1 s even while the stream is closed (hot-plug patch 4), which turns the
+  status icon off. When the camera reappears, the monitor resets the V4L2 stream
+  state left behind by the disconnect and restarts the stream (`STREAMOFF` →
+  `STREAMON` plus a one-frame check) only if a photo was in flight. While idle it
+  just marks the camera connected; the next `take_photo` opens a fresh stream. It
+  does **not** deinit/reinit `esp_video` (that path deadlocks waiting on the
+  USB-host teardown). After three consecutive failed attempts the board reboots
   automatically as a guaranteed fallback. A `take_photo` during recovery waits
   up to ~1 s for the capture lock and then fails with
   `Capture skipped: camera is restarting` rather than blocking.
-- **Vendor patch required (three changes):**
+- **Vendor patch required (four changes):**
   1. `esp_video_usb_uvc_device.c` / disconnect callback: return the frame(s)
      still held by the capture buffer and call `uvc_host_stream_close()` (the
      same flow as Espressif's USB UVC example), then clear `stream_hdl`.
@@ -88,14 +99,19 @@ options.
   3. `esp_video_usb_uvc_device.c` / `uvc_video_stop()`: skip the UVC host calls
      when `stream_hdl` is already NULL, so `STREAMOFF` still resets the
      esp_video stream state after a disconnect.
-  `my_exploration/tools/patch-esp-video-uvc-hotplug.py` applies all three
+  4. `esp_video_usb_uvc_device.c` / `uvc_video_get_parm()`: the UVC host only
+     delivers a disconnect event to an **open** stream, so with on-demand
+     streaming `dev_addr` stayed valid after an unplug — the icon never cleared
+     and the reconnect handler could not adopt the replugged device (it only
+     fills slots with `dev_addr == 0`). The probe now checks `dev_addr` against
+     `usb_host_device_addr_list_fill()` and resets the device state when absent.
+  `my_exploration/tools/patch-esp-video-uvc-hotplug.py` applies all four
   idempotently. `managed_components/` is generated and gitignored — rerun the
   script after a clean build or component update.
 - During testing the camera occasionally dropped off the USB bus by itself
   (`uvc_video_get_parm: UVC device ... is not connected` in the log). The icon
   turned off as expected. If that happens repeatedly, recheck the external 5 V
-  feed and the VBUS splice — the driver only clears `dev_addr` on a real
-  `DEV_GONE` event.
+  feed and the VBUS splice.
 - Vision is **working end-to-end (2026-11-13)**: `take_photo` → JPEG upload →
   the model's description came back through the self-hosted stack, so the
   configured vision backend/key is valid. The Mac's LAN IP is `192.168.1.6`, the
@@ -495,14 +511,14 @@ yet. Server details: [../server/README.md](../server/README.md).
 - [x] ESP log has no `open /dev/video40 failed` (camera enumerated,
       `Camera init success`).
 - [x] `MCP: Add tool: self.camera.take_photo` appears.
-- [x] OLED `photo_camera` icon appears next to Wi-Fi while the camera streams and
-      turns off ~1 s after the USB device disappears (2026-11-13). With the 10 s
-      idle linger it also turned off after `Camera idle, stopping UVC stream to
-      save power`; with the current `IDLE_SEC=0` the stream window is shorter
-      than the status-bar tick, so the icon stays hidden.
-- [x] Unplug/replug recovery: `Camera disconnected` → `Camera reconnected` →
-      `Camera recovered`, icon returns on the next photo (2026-11-13, hardware
-      verified).
+- [x] OLED shows a picture icon while the camera is plugged in and the
+      `photo_camera` icon while it captures (`Camera indicator: connected` →
+      `capturing` → `connected`); unplugging hides it within ~1 s (2026-11-13,
+      hardware verified).
+- [x] Unplug/replug while the stream is idle: `Camera disconnected` →
+  `Camera indicator: off`, then `Camera re-enumerated while idle, stream stays
+  off` → `Camera indicator: connected`, and the next photo works (2026-11-13,
+  hardware verified).
 - [x] `self.camera.take_photo` is invoked (`MCP: Call tool:
       self.camera.take_photo`, 2026-11-13).
 - [x] Vision URL/token from the server is valid (the model described the
@@ -517,10 +533,10 @@ yet. Server details: [../server/README.md](../server/README.md).
 | `main/Kconfig.projbuild` | `XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` (idle linger before `STREAMOFF`) |
 | `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
 | `main/boards/common/esp_video.h` | connection probe, hot-plug reopen, on-demand stream, `IsStreaming()` |
-| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, on-demand `STREAMON`/`STREAMOFF`, reopen on reconnect, DQBUF timeout |
-| `my_exploration/tools/patch-esp-video-uvc-hotplug.py` | reapply the vendor UVC disconnect fix after component sync |
+| `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, on-demand `STREAMON`/`STREAMOFF`, reconnect handling, DQBUF timeout, status-bar push on stream change |
+| `my_exploration/tools/patch-esp-video-uvc-hotplug.py` | reapply the four vendor UVC hot-plug fixes after component sync |
 | `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |
-| `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera-icon state |
+| `main/display/lvgl_display/lvgl_display.cc` | `UpdateStatusBar()` camera icon: `IMAGE` = present, `PHOTO_CAMERA` = capturing |
 | `my_exploration/.archive/camera/images/IMG_2143.PNG` … `IMG_2147.PNG` | Product page/spec screenshots |
 | `my_exploration/tools/serial_capture.py` | Reset + capture CH343 serial output |
 | `my_exploration/README.md` | Current project index |

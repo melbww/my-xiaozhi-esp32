@@ -73,6 +73,7 @@ private:
     // Both require device_mutex_ to be held by the caller.
     bool StartStreamLocked();
     void StopStreamLocked();
+    void RefreshCameraIndicator();
     bool RecoverCamera();
     void SuppressDisconnectLogs();
     void RestoreDisconnectLogs();
@@ -84,6 +85,7 @@ public:
     ~EspVideo() override;
 
     virtual void SetExplainUrl(const std::string& url, const std::string& token);
+    virtual bool IsConnected() const override;
     virtual bool IsStreaming() const override;
     virtual bool Capture();
     // 翻转控制函数

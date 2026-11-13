@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Patch the managed esp_video component for USB-camera hot-plug.
 
-Two vendor limitations prevent a replugged UVC camera from working:
+Four vendor limitations prevent a replugged UVC camera from working properly:
 
 1. `esp_video_usb_uvc_device.c` pauses the stream on
    UVC_HOST_DEVICE_DISCONNECTED but never closes it. The frame held by the
@@ -20,6 +20,15 @@ Two vendor limitations prevent a replugged UVC camera from working:
    handle is NULL on a reconnect, so `STREAMOFF` returns an error and the
    esp_video stream state can never be reset for a restart. Fix: skip the host
    calls when `stream_hdl` is NULL.
+
+4. `esp_video_usb_uvc_device.c` only learns about a disconnect through the
+   *stream* event callback, which cannot fire when no stream is open. With
+   on-demand streaming the stream is closed most of the time, so `dev_addr`
+   stayed valid after an unplug: `VIDIOC_G_PARM` kept reporting the camera as
+   connected (status icon never cleared) and the connect handler could not adopt
+   the replugged device, because it only fills slots with `dev_addr == 0`. Fix:
+   verify `dev_addr` against the USB host device list inside
+   `uvc_video_get_parm()` and reset the device state when it is gone.
 
 `managed_components/` is generated and gitignored; rerun this script after a
 clean build or component update:
@@ -114,6 +123,55 @@ PATCHES = [
         ESP_RETURN_ON_ERROR(uvc_host_stream_close(device->stream_hdl), TAG, "Failed to close UVC stream");
         device->stream_hdl = NULL;
     }
+""",
+    ),
+    (
+        COMPONENT / "src" / "device" / "esp_video_usb_uvc_device.c",
+        """static esp_err_t uvc_video_get_parm(struct esp_video *video, struct v4l2_streamparm *stream_parm, struct esp_video_stream *stream)
+{
+    struct uvc_video *device = VIDEO_PRIV_DATA(struct uvc_video *, video);
+    struct v4l2_fract *time_per_frame = &stream_parm->parm.capture.timeperframe;
+
+    ESP_RETURN_ON_FALSE(device->dev_addr, ESP_ERR_NOT_FOUND, TAG, "UVC device=%p is not connected", device);
+""",
+        """/* HOTPLUG PATCH: the disconnect event is only delivered to an open stream, so
+ * dev_addr stays valid after the camera is unplugged while no stream is running
+ * (the normal on-demand case). G_PARM would then keep reporting a removed camera
+ * as connected, and the connect handler could not adopt the replugged device
+ * because it only fills slots whose dev_addr is 0. Verify the address against
+ * the USB host device list and reset the device state once it is gone. */
+static bool uvc_video_is_present(struct uvc_video *device)
+{
+    if (!device->dev_addr) {
+        return false;
+    }
+
+    uint8_t dev_addr_list[UVC_INIT_MAX_PHYSICAL_DEVICES] = {0};
+    int num_of_devices = 0;
+    if (usb_host_device_addr_list_fill(sizeof(dev_addr_list), dev_addr_list, &num_of_devices) != ESP_OK) {
+        /* Unknown host state: keep reporting what we had instead of flapping. */
+        return true;
+    }
+
+    for (int i = 0; i < num_of_devices; i++) {
+        if (dev_addr_list[i] == device->dev_addr) {
+            return true;
+        }
+    }
+
+    ESP_LOGD(TAG, "UVC device with dev_addr %d is gone", device->dev_addr);
+    device->dev_addr = 0;
+    device->stream_index = 0;
+    device->frame_info_num = 0;
+    return false;
+}
+
+static esp_err_t uvc_video_get_parm(struct esp_video *video, struct v4l2_streamparm *stream_parm, struct esp_video_stream *stream)
+{
+    struct uvc_video *device = VIDEO_PRIV_DATA(struct uvc_video *, video);
+    struct v4l2_fract *time_per_frame = &stream_parm->parm.capture.timeperframe;
+
+    ESP_RETURN_ON_FALSE(uvc_video_is_present(device), ESP_ERR_NOT_FOUND, TAG, "UVC device=%p is not connected", device);
 """,
     ),
 ]

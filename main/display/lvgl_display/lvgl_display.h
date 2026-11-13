@@ -49,7 +49,10 @@ protected:
     const char* battery_icon_ = nullptr;
     const char* network_icon_ = nullptr;
     bool muted_ = false;
-    bool camera_active_ = false;
+
+    // Camera indicator state: hidden, camera present but idle, or capturing.
+    enum class CameraIndicator { kNone, kConnected, kCapturing };
+    CameraIndicator camera_indicator_ = CameraIndicator::kNone;
 
     std::chrono::system_clock::time_point last_status_update_time_;
     esp_timer_handle_t notification_timer_ = nullptr;

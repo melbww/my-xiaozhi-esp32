@@ -443,6 +443,7 @@ bool EspVideo::StartStreamLocked() {
         return false;
     }
     streaming_on_ = true;
+    RefreshCameraIndicator();
     return true;
 }
 
@@ -457,6 +458,17 @@ void EspVideo::StopStreamLocked() {
     // EBUSY means the driver already considers the stream stopped; ENODEV means
     // the device vanished and nothing is running. Either way, stop tracking it.
     streaming_on_ = false;
+    RefreshCameraIndicator();
+}
+
+void EspVideo::RefreshCameraIndicator() {
+    // The status bar normally refreshes on the main loop's 1 s clock tick, but
+    // that tick can be starved for many seconds during a conversation, which
+    // would hide the brief "capturing" state. Push the update right away.
+    auto display = Board::GetInstance().GetDisplay();
+    if (display != nullptr) {
+        display->UpdateStatusBar(true);
+    }
 }
 
 bool EspVideo::RecoverCamera() {
@@ -564,6 +576,7 @@ void EspVideo::MonitorStream() {
             stream_wanted_ = false;
             stream_idle_deadline_ = 0;
             streaming_on_ = false;
+            RefreshCameraIndicator();
             continue;
         }
 
@@ -575,6 +588,7 @@ void EspVideo::MonitorStream() {
                 camera_connected_ = true;
                 ESP_LOGI(TAG, "Camera recovered%s",
                          streaming_on_.load() ? ", stream restarted" : ", stream idle");
+                RefreshCameraIndicator();
             } else {
                 recovery_attempts_++;
                 if (recovery_attempts_ >= 3) {
@@ -638,6 +652,19 @@ EspVideo::~EspVideo() {
 void EspVideo::SetExplainUrl(const std::string& url, const std::string& token) {
     explain_url_ = url;
     explain_token_ = token;
+}
+
+bool EspVideo::IsConnected() const {
+    if (video_fd_ < 0) {
+        return false;
+    }
+    if (!is_uvc_) {
+        // Built-in sensors only run while streaming.
+        return streaming_on_.load();
+    }
+    // The UVC probe stays valid while the stream is closed, so the status bar
+    // can show "camera present" even when the stream is idle.
+    return camera_connected_.load() && !camera_unplugged_.load();
 }
 
 bool EspVideo::IsStreaming() const {
