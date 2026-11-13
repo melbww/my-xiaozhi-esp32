@@ -1112,7 +1112,7 @@ bool EspVideo::Capture() {
 
     // 显示预览图片
     auto display = Board::GetInstance().GetDisplay();
-    if (display != nullptr) {
+    if (display != nullptr && display->SupportsPreviewImage()) {
         if (!frame_.data) {
             ESP_LOGE(TAG, "frame.data is null");
             return false;
@@ -1262,6 +1262,58 @@ bool EspVideo::SetVFlip(bool enabled) {
         return false;
     }
     return true;
+}
+
+namespace {
+
+struct JpegSinkContext {
+    const Camera::JpegSink* sink;
+    size_t total = 0;
+    bool ok = true;
+};
+
+size_t WriteJpegChunk(void* arg, size_t index, const void* data, size_t len) {
+    auto* ctx = static_cast<JpegSinkContext*>(arg);
+    if (index == 0 && data != nullptr && len > 0 && ctx->ok) {
+        ctx->ok = (*ctx->sink)(data, len);
+        if (ctx->ok) {
+            ctx->total += len;
+        }
+    }
+    return len;
+}
+
+}  // namespace
+
+/**
+ * @brief Stream the last captured frame as JPEG without uploading it.
+ *
+ * The frame buffer belongs to the camera and is reused by the next Capture(), so
+ * this must run before another capture starts. This is the local counterpart of
+ * Explain(): it lets the photo be served to a browser instead of being sent to a
+ * vision model, and it streams the encoder's own buffer, so no full-size copy is
+ * allocated (an HD frame is ~50 KB).
+ */
+std::expected<size_t, std::string> EspVideo::WriteJpeg(const JpegSink& sink, int quality) {
+    if (frame_.data == nullptr || frame_.len == 0) {
+        return std::unexpected("No captured frame; call Capture() first");
+    }
+
+    uint16_t w = frame_.width ? frame_.width : 320;
+    uint16_t h = frame_.height ? frame_.height : 240;
+    v4l2_pix_fmt_t enc_fmt = frame_.format;
+
+    JpegSinkContext ctx = {.sink = &sink};
+    bool ok = image_to_jpeg_cb(frame_.data, frame_.len, w, h, enc_fmt,
+                               static_cast<uint8_t>(quality), WriteJpegChunk, &ctx);
+
+    if (!ok || !ctx.ok || ctx.total == 0) {
+        ESP_LOGE(TAG, "Failed to encode image to JPEG");
+        return std::unexpected("Failed to encode image to JPEG");
+    }
+    ESP_LOGI(TAG, "Snapshot frame size=%d bytes, JPEG size=%d bytes", (int)frame_.len,
+             (int)ctx.total);
+    return ctx.total;
 }
 
 /**

@@ -141,6 +141,24 @@ The upstream XiaoZhi firmware does not implement the vendor's
 the `id` partition but does not read it. Use the vendor firmware/backup if you
 need the original activation flow.
 
+## Camera snapshot over HTTP
+
+Besides the `self.camera.take_photo` MCP tool (which uploads the photo to the
+server's vision model), the board serves the camera directly on the LAN:
+
+```text
+http://192.168.1.13/           one-button viewer page
+http://192.168.1.13/photo.jpg  take one photo, get a JPEG (?q=1..95)
+```
+
+`CameraHttpServer` (`main/boards/common/camera_http_server.{h,cc}`) is started
+from `StartNetwork()` and answers a GET by calling `Capture()` and then
+`Camera::WriteJpeg()`. Nothing is uploaded anywhere, so it also works with
+the xiaozhi server stopped. Each request costs the ~1.2 s UVC stream start plus
+the 1 s auto-exposure settle; the stream closes again right after the capture
+(`CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0`). No polling: the page captures
+only when the button is pressed.
+
 ## Known limitations
 
 - The S3 2.1.0 motor tool names are implemented: `self.motor.move_forward`,
@@ -163,4 +181,5 @@ need the original activation flow.
 - Motors do not turn below roughly 60 % duty with the L298N on this rail, so
   non-zero speed commands are mapped into 60-100 % duty.
 - No LiDAR/VL53L0X or built-in camera. External USB UVC camera support is
-  compiled but disabled; see `my_exploration/camera/README.md`.
+  compiled in (`CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y`); see
+  `my_exploration/camera/README.md`.

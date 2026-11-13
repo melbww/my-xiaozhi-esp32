@@ -118,6 +118,11 @@ options.
   the model's description came back through the self-hosted stack, so the
   configured vision backend/key is valid. The Mac's LAN IP is `192.168.1.6`, the
   robot `192.168.1.13`.
+- **Local snapshot over HTTP (2026-11-13, verified on hardware):** the board
+  serves `http://<robot-ip>/photo.jpg` plus a one-button viewer at `/`, with no
+  vision model and no server involved. `curl http://192.168.1.13/photo.jpg`
+  returned a 1280×720 JPEG (~40 KB) in 0.4–2.5 s. See
+  [Local snapshot over HTTP](#local-snapshot-over-http-no-vision-model).
 
 ## Camera module
 
@@ -500,6 +505,41 @@ yet. Server details: [../server/README.md](../server/README.md).
 > Earlier USB-host test, build recipe, diagnostic patch, and detailed formats:
 > [.archive/camera/usb-host-test.md](../.archive/camera/usb-host-test.md).
 
+## Local snapshot over HTTP (no vision model)
+
+`self.camera.take_photo` is the only camera MCP tool and it always ends in
+`Explain()`: a JPEG upload to the server's `vision_explain` URL. To look at a
+photo yourself, without a vision model and without the xiaozhi server at all,
+`desk-bot-01` also runs a tiny HTTP server on the device
+(`CameraHttpServer`, `main/boards/common/camera_http_server.cc`):
+
+| URL | Result |
+|---|---|
+| `http://192.168.1.13/photo.jpg` | take one photo and return it as JPEG; `?q=1..95`, default 80 |
+| `http://192.168.1.13/` | one-button viewer page (size + round-trip time) |
+
+- Same capture path as the MCP tool: `Capture()` opens the UVC stream, waits 1 s
+  for auto-exposure, and the monitor closes it at the next tick because
+  `CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0`. Measured 2026-11-13: ~2 s from
+  idle, ~0.4 s when the previous photo's stream is still open.
+- Nothing is uploaded. The only traffic is the response to whoever opened the
+  URL, so the robot does not need to reach the Mac (only your browser needs to
+  reach the robot).
+- The page never polls: it captures only when you press the button, so the
+  module is not kept streaming (and hot).
+- The server starts from `DeskBot01Board::StartNetwork()` once the WiFi stack is
+  up; it is always on for this board (no Kconfig switch) and uses port 80.
+- The photo is **not** drawn on the OLED yet: `OledDisplay` has no preview
+  implementation, and `Capture()` skips the preview decode entirely when
+  `Display::SupportsPreviewImage()` is false (the OLED case). Decoding a
+  1280×720 JPEG down to 128×64 used to cost ~3 s per photo on this board.
+- `Camera::WriteJpeg()` (implemented by `EspVideo`) is the reusable piece: it
+  streams the last captured frame as JPEG instead of uploading it, and passes
+  the encoder's own buffer through, so no full-size copy is allocated.
+- `?q=` only affects frames that the sensor delivers uncompressed. This module
+  delivers MJPEG, which is passed through unchanged, so `q` is a no-op here; a
+  photo is roughly 50 KB.
+
 ## Troubleshooting checklist
 
 - [ ] Camera on the **USB / OTG** port, not `UART / COM`.
@@ -532,6 +572,19 @@ yet. Server details: [../server/README.md](../server/README.md).
 - [x] Vision URL/token from the server is valid (the model described the
       captured photo, 2026-11-13).
 - [x] Robot can reach the server IP/port.
+- [x] Local snapshot, no vision model:
+      `curl -s http://192.168.1.13/photo.jpg -o cam.jpg` returns a 1280×720
+      JPEG (2026-11-13, 0.4–2.5 s per request).
+- [x] Camera preview decode is skipped on the OLED (`SupportsPreviewImage()`
+      false), which removed the ~3 s/photo preview cost (2026-11-13).
+
+### Snapshot server symptoms
+
+| Symptom | Likely cause |
+|---|---|
+| `curl: (7) Failed to connect` | Server starts only after `StartNetwork()`; check Wi-Fi and the robot's IP |
+| `/photo.jpg` says "Capture failed" | Camera unplugged or UVC init still retrying (~2 s probe); check the OLED camera icon |
+| 500 on every request | Port 80 may be taken, or `EspVideo` never opened `/dev/video40`; check the boot log |
 
 ## Files and commits
 
@@ -539,8 +592,11 @@ yet. Server details: [../server/README.md](../server/README.md).
 |---|---|
 | `main/boards/desk-bot-01/config.json` | UVC Kconfig flags |
 | `main/Kconfig.projbuild` | `XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` (idle linger before `STREAMOFF`) |
-| `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()` |
+| `main/boards/desk-bot-01/compact_wifi_board.cc` | `EspVideo` init + `GetCamera()`; `StartNetwork()` starts `CameraHttpServer` |
 | `main/boards/common/esp_video.h` | connection probe, hot-plug reopen, on-demand stream, `IsStreaming()` |
+| `main/boards/common/camera_http_server.{h,cc}` | on-device `GET /photo.jpg` snapshot server (no vision model) |
+| `main/boards/common/camera.h` | `WriteJpeg()` — stream the frame as JPEG instead of an explain upload |
+| `main/display/display.h` | `SupportsPreviewImage()` — skip the camera preview decode on displays without a preview area |
 | `main/boards/common/esp_video.cc` | 1 s `VIDIOC_G_PARM` probe, on-demand `STREAMON`/`STREAMOFF`, reconnect handling, DQBUF timeout, status-bar push on stream change |
 | `my_exploration/tools/patch-esp-video-uvc-hotplug.py` | reapply the four vendor UVC hot-plug fixes after component sync |
 | `main/display/oled_display.cc` | 128×64/128×32 camera-icon label placement |

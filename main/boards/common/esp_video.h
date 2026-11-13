@@ -96,4 +96,6 @@ public:
     virtual bool SetHMirror(bool enabled) override;
     virtual bool SetVFlip(bool enabled) override;
     virtual std::expected<std::string, std::string> Explain(const std::string& question) override;
+    virtual std::expected<size_t, std::string> WriteJpeg(const JpegSink& sink,
+                                                         int quality = 80) override;
 };

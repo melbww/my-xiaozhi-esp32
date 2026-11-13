@@ -81,6 +81,10 @@ public:
     }
     virtual void LoadAssets() {}
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image);
+    // True when SetPreviewImage() actually renders the image. Callers skip the
+    // (potentially expensive) decode when a display has no preview area, e.g.
+    // the 128x64 monochrome OLED.
+    virtual bool SupportsPreviewImage() const { return false; }
     virtual bool SetTextFont(std::shared_ptr<LvglFont> text_font) {
         (void)text_font;
         return false;

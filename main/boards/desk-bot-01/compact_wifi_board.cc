@@ -1,6 +1,7 @@
 #include "application.h"
 #include "assets/lang_config.h"
 #include "button.h"
+#include "camera_http_server.h"
 #include "codecs/no_audio_codec.h"
 #include "config.h"
 #include "display/oled_display.h"
@@ -558,6 +559,15 @@ public:
     virtual Led* GetLed() override { return &GetStatusLed(); }
 
     virtual Camera* GetCamera() override { return camera_; }
+
+    virtual void StartNetwork() override {
+        WifiBoard::StartNetwork();
+        // Pull-based camera snapshot for humans: http://<robot-ip>/photo.jpg.
+        // The frame is served directly and never sent to the vision model.
+        if (camera_ != nullptr) {
+            CameraHttpServer::Start();
+        }
+    }
 
     virtual AudioCodec* GetAudioCodec() override {
         static NoAudioCodecSimplex audio_codec(AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,

@@ -56,6 +56,7 @@ list(APPEND SOURCES
     "boards/common/axp2101.cc"
     "boards/common/backlight.cc"
     "boards/common/button.cc"
+    "boards/common/camera_http_server.cc"
     "boards/common/i2c_device.cc"
     "boards/common/knob.cc"
     "boards/common/power_save_timer.cc"
@@ -1205,6 +1206,7 @@ idf_component_register(SRCS ${SOURCES}
                         esp_psram
                         esp_netif
                         esp_eth
+                        esp_http_server
                         esp_driver_gpio
                         esp_driver_uart
                         esp_driver_spi

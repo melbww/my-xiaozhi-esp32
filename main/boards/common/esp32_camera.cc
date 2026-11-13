@@ -126,17 +126,15 @@ bool Esp32Camera::Capture() {
         }
 
         // Allocate separate buffer for preview display
-        uint8_t* preview_data =
-            (uint8_t*)heap_caps_malloc(data_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-        if (preview_data != nullptr) {
-            memcpy(preview_data, encode_buf_, data_size);
-            auto display = Board::GetInstance().GetDisplay();
-            if (display != nullptr) {
+        auto display = Board::GetInstance().GetDisplay();
+        if (display != nullptr && display->SupportsPreviewImage()) {
+            uint8_t* preview_data =
+                (uint8_t*)heap_caps_malloc(data_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+            if (preview_data != nullptr) {
+                memcpy(preview_data, encode_buf_, data_size);
                 display->SetPreviewImage(std::make_unique<LvglAllocatedImage>(
                     preview_data, data_size, current_fb_->width, current_fb_->height,
                     current_fb_->width * 2, LV_COLOR_FORMAT_RGB565));
-            } else {
-                heap_caps_free(preview_data);
             }
         }
     } else if (current_fb_->format == PIXFORMAT_JPEG) {

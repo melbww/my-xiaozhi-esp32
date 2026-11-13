@@ -49,6 +49,7 @@ public:
     virtual void RemoveChatMessage(const char* role, const char* content) override;
     virtual void ClearChatMessages() override;
     virtual void SetPreviewImage(std::unique_ptr<LvglImage> image) override;
+    virtual bool SupportsPreviewImage() const override { return true; }
     virtual void SetupUI() override;
     // Add theme switching function
     virtual void SetTheme(Theme* theme) override;
