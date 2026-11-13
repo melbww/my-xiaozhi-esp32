@@ -48,7 +48,8 @@ See [server/README.md](server/README.md) and [server/tts.md](server/tts.md).
 | Doc | What it covers |
 |---|---|
 | [robot/hardware.md](robot/hardware.md) | Device ID, USB ports, backup, partitions, verified pin map |
-| [robot/firmware.md](robot/firmware.md) | Build, flash, recovery, MCP tools, takeover checklist |
+| [robot/firmware.md](robot/firmware.md) | Build, flash, recovery, takeover checklist |
+| [robot/mcp-tools.md](robot/mcp-tools.md) | Full MCP tool inventory: names, parameters, defaults, visibility |
 | [server/README.md](server/README.md) | Self-hosted stack, OTA/WS, activation, logs |
 | [server/tts.md](server/tts.md) | TTS options, latency diagnosis, local `say`, barge-in |
 | [camera/README.md](camera/README.md) | USB UVC camera, firmware support, vision pipeline |

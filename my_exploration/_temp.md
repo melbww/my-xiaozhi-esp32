@@ -40,3 +40,9 @@ If you want to reduce power, the meaningful option is different: keep the UVC st
 
 
 let's do this to reduce power consumption
+
+
+-- todo
+
+flip cam
+flip green red color

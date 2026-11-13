@@ -84,69 +84,39 @@ Expected current boot path:
 
 - `SKU=desk-bot-01`, SSD1306/LVGL initialized
 - `NoAudioCodec: Simplex channels created`
-- 30 MCP tools registered (23 visible to the model, 7 user-only)
+- 31 MCP tools registered (24 visible to the model, 7 user-only; 30/23 without
+  the UVC component)
 - Wi-Fi from NVS; OTA from `192.168.1.6:8002`
 - wake word `Hi,ESP`; WebSocket to `192.168.1.6:8000`
 - TTS playback through the local `say` service
 
 ## MCP tools
 
-Vendor S3 2.1.0 tool names:
+The complete 31-tool inventory — namespaces, parameters, defaults, return
+values, and why some upstream tools are absent — is in
+[**mcp-tools.md**](mcp-tools.md). Summary:
+
+| Group | Tools | Visibility |
+|---|---|---|
+| Status / audio / screen / camera | `self.get_device_status`, `self.audio_speaker.set_volume`, `self.screen.set_theme`, `self.camera.take_photo` | model |
+| Motion | `self.motor.drive`, `stop`, `move_forward`, `move_backward`, `spin_around`, `quick_forward`, `quick_backward`, `wiggle`, `dance`, `forward`, `backward`, `turn_left`, `turn_right`, `self.car.act` | model |
+| Lights (7-LED WS2812) | `self.lamp.get_state/turn_on/turn_off`, `self.rgb_led.set_color/turn_off/restore_default_idle` | model |
+| System / maintenance | `self.get_system_info`, `self.reboot`, `self.upgrade_firmware`, `self.screen.get_info/snapshot/preview_image`, `self.assets.set_download_url` | user-only |
+
+Not available on this board: C3 2.2.x `self.motor.sequence` (vendor release
+notes in
+[../.archive/vendor/c3-2.2-release-notes.md](../.archive/vendor/c3-2.2-release-notes.md)),
+fall detection for `move_forward` / `quick_forward` (no edge/distance sensor),
+`self.screen.set_brightness` (no backlight), and battery tools.
+
+Expected boot line on a camera-enabled build:
 
 ```text
-self.motor.move_forward
-self.motor.move_backward
-self.motor.spin_around
-self.motor.turn_left
-self.motor.turn_right
-self.motor.quick_forward
-self.motor.quick_backward
-self.motor.wiggle
-self.motor.dance
-self.motor.stop
+I (...) MCP: 31 tools registered: 24 visible to the model, 7 user-only
 ```
 
-Additional convenience tools:
-
-```text
-self.motor.drive
-self.motor.forward
-self.motor.backward
-self.car.act
-self.lamp.get_state
-self.lamp.turn_on
-self.lamp.turn_off
-self.rgb_led.set_color
-self.rgb_led.turn_off
-self.rgb_led.restore_default_idle
-```
-
-Not implemented:
-
-- C3 2.2.x `self.motor.sequence` / advanced `self.car.act` action sequences
-  (not present in the S3 2.1.0 dump). Vendor C3 release notes are in
-  [../.archive/vendor/c3-2.2-release-notes.md](../.archive/vendor/c3-2.2-release-notes.md).
-- Fall detection for `move_forward` / `quick_forward` (no edge/distance sensor).
-- The vendor `self.rgb_led.*` names; this board exposes the WS2812 strip as
-  `self.lamp.*` plus the added `self.rgb_led.*` tools.
-
-### Tool parameters
-
-| Tool | Parameters |
-|---|---|
-| `self.motor.drive` | `steer` −100..100; `throttle` −100..100; `duration_ms` 0..15000 (0 = continuous) |
-| `self.motor.stop` | none |
-| `self.motor.move_forward` / `move_backward` | `speed_percent` 0..100 (default 100); `duration_ms` default 5000 |
-| `self.motor.spin_around` | `speed_percent` 0..100; `duration_ms` default 1000 |
-| `self.motor.turn_left` / `turn_right` | `speed_percent` 0..100; `duration_ms` default 600 |
-| `self.motor.quick_forward` | `speed_percent` 60..100; `duration_ms` default 1000 |
-| `self.motor.quick_backward` | `speed_percent` 0..100; `duration_ms` default 1000 |
-| `self.motor.wiggle` | `speed_percent` 0..100; `duration_ms` default 300 |
-| `self.motor.dance` | `speed_percent` 0..100 (forward briefly) |
-| `self.motor.forward` / `backward` | `speed` 0..100; `duration_ms` default 1000 |
-| `self.car.act` | `action` forward/backward/turn_left/turn_right/spin/stop; `speed` 0..100; `duration_ms` default 1000 |
-| `self.lamp.*` | get_state/turn_on/turn_off; 7-LED WS2812 strip |
-| `self.rgb_led.*` | set_color/turn_off/restore_default_idle |
+A build without `CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE` registers 30
+(23 visible) because `self.camera.take_photo` is absent.
 
 ## Why Wi-Fi and UUID survive a reflash
 

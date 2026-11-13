@@ -21,7 +21,8 @@ to `.archive/`.
 |---|---|
 | `my_exploration/README.md` | Index, current state, quick start, critical rules |
 | `my_exploration/robot/hardware.md` | Device ID, USB ports, eFuse, backup, partitions, verified pins |
-| `my_exploration/robot/firmware.md` | Build, flash, recovery, MCP tools, takeover checklist |
+| `my_exploration/robot/firmware.md` | Build, flash, recovery, takeover checklist |
+| `my_exploration/robot/mcp-tools.md` | Full MCP tool inventory: names, parameters, defaults, visibility |
 | `my_exploration/server/README.md` | Self-hosted stack, OTA/WS, activation, logs |
 | `my_exploration/server/tts.md` | TTS choices, latency, local `say`, barge-in |
 | `my_exploration/camera/README.md` | Current camera status, firmware support, vision |
@@ -49,9 +50,10 @@ Link to it; do not copy large configs here. Local TTS service:
 ## Workflow
 
 1. **Classify the fact.** Current hardware → `robot/hardware.md`; build/flash →
-   `robot/firmware.md`; server/OTA/activation → `server/README.md`; TTS/latency/
-   barge-in → `server/tts.md`; camera → `camera/README.md`; vendor BOM/wiring →
-   `vendor/`; current status → `README.md`.
+   `robot/firmware.md`; MCP tool names/parameters → `robot/mcp-tools.md`;
+   server/OTA/activation → `server/README.md`; TTS/latency/barge-in →
+   `server/tts.md`; camera → `camera/README.md`; vendor BOM/wiring → `vendor/`;
+   current status → `README.md`.
 2. **Edit the owning page**, keeping it under ~250 lines. Add/update
    `Last verified: YYYY-MM-DD`.
 3. **Archive superseded material.** Move old deep dives, dated narratives, and

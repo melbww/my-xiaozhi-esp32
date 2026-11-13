@@ -34,7 +34,8 @@ These docs were split from one long context file on 2026-11-09. The goal is
 | New information | Put it in |
 |---|---|
 | Pins, board revision, backup, partitions, eFuse | [robot/hardware.md](robot/hardware.md) |
-| Build/flash/recovery/MCP tools | [robot/firmware.md](robot/firmware.md) |
+| Build/flash/recovery | [robot/firmware.md](robot/firmware.md) |
+| MCP tool names, parameters, visibility | [robot/mcp-tools.md](robot/mcp-tools.md) |
 | Server stack, OTA/WS, activation, logs | [server/README.md](server/README.md) |
 | TTS, latency, barge-in, voice choices | [server/tts.md](server/tts.md) |
 | Camera, USB power, vision pipeline | [camera/README.md](camera/README.md) |

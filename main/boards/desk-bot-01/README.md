@@ -169,8 +169,9 @@ only when the button is pressed.
   system is not present in the S3 2.1.0 dump and is not replicated here.
 - Fall detection for `move_forward` / `quick_forward` is not implemented because
   this unit has no edge/distance sensor.
-- The vendor's `self.rgb_led.*` tools are not replicated; the on-board WS2812 is
-  used as the status LED.
+- The vendor's advanced `self.rgb_led.*` effects are not replicated. The
+  on-board 7-LED WS2812 strip is the status LED and is also controllable through
+  `self.lamp.*` and `self.rgb_led.set_color/turn_off/restore_default_idle`.
 - The vendor firmware was built with ESP-IDF `v5.5.2-dirty`; this repo targets
   ESP-IDF 6.x. Expect minor API/behavior differences.
 - The OLED orientation (`DISPLAY_MIRROR_X/Y`) may need adjusting for the
