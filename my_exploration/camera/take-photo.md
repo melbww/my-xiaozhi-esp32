@@ -215,6 +215,25 @@ Use hardware for safety:
 - For vision, keep the stream open and run a local detector (ESP-DL or a LAN
   companion), not an MCP/cloud call.
 
+## Log viewer: see the exact photo
+
+The server saves the **same JPEG** that goes to the main LLM and logs a short
+marker:
+
+```text
+PHOTO /photos/2026-11-14/16-56-22-e836ac65.jpg
+```
+
+- Host path: `my_explorations/server/deploy/logs/photos/<date>/<file>.jpg`
+  (the container's `tmp/` is bind-mounted there).
+- The log viewer at `http://127.0.0.1:8007/logs.html` renders that line as a
+  thumbnail; click it for the full 1280×720 image. The `/photos/` route is
+  read-only and path-traversal protected.
+- The LLM request log redacts the base64 (`data:image/<redacted>;base64,<omitted>`),
+  so photos don't bloat the log or the viewer's recordings.
+- Limit: this applies to the default image path. The legacy `ask_vision` path
+  uploads to the VLM and is not saved by this hook.
+
 ## Not MCP: local snapshot
 
 `http://<robot-ip>/photo.jpg` uses the same `Capture()` + `Camera::WriteJpeg()`

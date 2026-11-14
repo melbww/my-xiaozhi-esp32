@@ -89,6 +89,19 @@ is **not part of the robot path** and is currently stopped. If you start it for
 browser testing, it also starts a Mac wake-word listener unless
 `wakeword_runtime/config.json` has `"enabled": false` (it is currently false).
 
+For the robot stack itself, use the separate log viewer:
+
+```sh
+my_explorations/log-viewer/log-viewer.sh start
+# http://127.0.0.1:8007/logs.html
+```
+
+It tails the server/web containers and renders each `take_photo` image as a
+thumbnail next to its `PHOTO /photos/...` line; the originals are saved under
+`my_explorations/server/deploy/logs/photos/`. See
+`my_explorations/log-viewer/README.md` in the server repo. The LLM request log
+redacts the image base64, so the log stays readable.
+
 ## Common issues
 
 | Symptom | Check |
