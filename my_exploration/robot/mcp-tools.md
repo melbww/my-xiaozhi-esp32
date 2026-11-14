@@ -1,6 +1,7 @@
 # Desk Bot 01 — MCP Tool Inventory
 
-**Last verified:** 2026-11-14 (derived from firmware source)
+**Last verified:** 2026-11-14 (derived from firmware source; `take_photo`
+image path verified on hardware)
 **Related:** [firmware.md](firmware.md) · [../camera/README.md](../camera/README.md) ·
 `docs/mcp-protocol.md` in the repo
 
@@ -28,8 +29,9 @@ MCP: Add tool: self.motor.drive
 The count is code-derived: 20 board tools + 4 common visible tools + 7
 user-only tools. `self.camera.take_photo` registers when
 `CONFIG_ESP_VIDEO_ENABLE_USB_UVC_VIDEO_DEVICE=y` is compiled in, even if no
-camera is physically attached. Verify on hardware by checking the
-`tools registered` line in the serial log.
+camera is physically attached. Verified on hardware 2026-11-14: the boot log
+shows `self.camera.take_photo`, no `self.camera.ask_vision`, and
+`31 tools registered: 24 visible to the model, 7 user-only`.
 
 Namespaces: `self.motor.*` (13), `self.car.act`, `self.lamp.*` (3),
 `self.rgb_led.*` (3), `self.screen.*` (1 model + 3 user), `self.audio_speaker.*`,

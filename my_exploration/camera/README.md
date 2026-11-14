@@ -122,11 +122,12 @@ options.
   configured vision backend/key is valid. The Mac's LAN IP is `192.168.1.6`;
   the robot is reachable as `Xiaozhi-CE50` (DHCP hostname). Its numeric lease
   changed from `.13` to `.5` on 2026-11-14.
-- **Image-to-main-LLM path (2026-11-14)**: the default tool now returns the JPEG
-  as MCP image content and the server injects it into the `deepseek-flash`
-  conversation (verified against the live endpoint). The separate VLM tool is
-  now `self.camera.ask_vision`, opt-in and off by default. See
-  [take-photo.md](take-photo.md).
+- **Image-to-main-LLM path (2026-11-14, verified on hardware)**: the default
+  tool returns the JPEG as MCP image content and the server injects it into the
+  `deepseek-flash` conversation. Flashed firmware, repeated voice photos, and
+  accurate scene descriptions were confirmed; no `vision/explain` call is made.
+  The separate VLM tool is now `self.camera.ask_vision`, opt-in and off by
+  default. See [take-photo.md](take-photo.md).
 - **Local snapshot over HTTP (2026-11-13, verified on hardware):** the board
   serves `http://<robot-ip>/photo.jpg` plus a one-button viewer at `/`, with no
   vision model and no server involved. `curl http://Xiaozhi-CE50/photo.jpg`

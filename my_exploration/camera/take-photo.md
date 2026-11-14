@@ -1,7 +1,6 @@
 # Camera Tools — Image to the Main LLM, Optional VLM
 
-**Last verified:** 2026-11-14 (image path tested against the live
-`deepseek-flash` endpoint; firmware builds; hardware flash pending)
+**Last verified:** 2026-11-14 (flashed and verified end-to-end on hardware)
 **Related:** [README.md](README.md) · [../robot/mcp-tools.md](../robot/mcp-tools.md) ·
 [../robot/firmware.md](../robot/firmware.md)
 
@@ -69,6 +68,13 @@ Verified 2026-11-14: the live `deepseek-flash` endpoint accepts JPEG
 `image_url` parts in this exact message shape (HTTP 200, image tokens counted).
 The main LLM loop already existed for `Action.REQLLM`; only the image plumbing
 was added.
+
+**Hardware verification (2026-11-14):** flashed `desk-bot-01`, boot log shows
+`self.camera.take_photo` and no `ask_vision`. Voice requests "拍一张照" produced
+repeated `self_camera_take_photo` calls and detailed scene descriptions from
+`deepseek-flash` ("灰色卫衣，手腕上…橙色表带", "侧面，戴细框眼镜…黑表盘的方表"),
+including a hand covering the lens. No `/mcp/vision/explain` request occurred.
+The `/photo.jpg` endpoint returned a 1280×720 JPEG in ~1.5 s.
 
 ## Legacy path: `self.camera.ask_vision` (off by default)
 

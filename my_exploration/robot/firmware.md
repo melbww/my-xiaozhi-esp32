@@ -1,6 +1,6 @@
 # Desk Bot 01 — Firmware Build, Flash, and Recovery
 
-**Last verified:** 2026-11-13
+**Last verified:** 2026-11-14
 **Hardware details:** [hardware.md](hardware.md)
 **Server:** [../server/README.md](../server/README.md)
 
@@ -85,7 +85,7 @@ Expected current boot path:
 - `SKU=desk-bot-01`, SSD1306/LVGL initialized
 - `NoAudioCodec: Simplex channels created`
 - 31 MCP tools registered (24 visible to the model, 7 user-only; 30/23 without
-  the UVC component)
+  the UVC component) — verified on hardware 2026-11-14
 - Wi-Fi from NVS; OTA from `192.168.1.6:8002`
 - wake word `Hi,ESP`; WebSocket to `192.168.1.6:8000`
 - TTS playback through the local `say` service
