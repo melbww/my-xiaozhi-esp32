@@ -1,135 +1,131 @@
-# `self.camera.take_photo` — End-to-End
+# Camera Tools — Image to the Main LLM, Optional VLM
 
-**Last verified:** 2026-11-14 (prompt/HTTP chain from source; vision verified
-end-to-end on 2026-11-13)
-**Related:** [README.md](README.md) · [../robot/mcp-tools.md](../robot/mcp-tools.md)
+**Last verified:** 2026-11-14 (image path tested against the live
+`deepseek-flash` endpoint; firmware builds; hardware flash pending)
+**Related:** [README.md](README.md) · [../robot/mcp-tools.md](../robot/mcp-tools.md) ·
+[../robot/firmware.md](../robot/firmware.md)
 
-## Where the prompt lives
+There are now **two camera tool paths**. The default one sends the photo to the
+**main LLM**, which must be multimodal. The old separate-VLM path is still
+available but disabled by default.
 
-The device sends **no prompt of its own**. It forwards the `question`
-argument verbatim to the server. Two pieces of fixed text shape the result:
-
-1. **Tool description on the device** — `main/mcp_server.cc`, registration of
-   `self.camera.take_photo`:
-
-   > Always remember you have a camera. If the user asks you to see something,
-   > use this tool to take a photo and then explain it.
-   > Args: `question`: The question that you want to ask about the photo.
-   > Return: A JSON object that provides the photo information.
-
-   This is what tells the model to always pass a question and to narrate the
-   answer afterwards. It is compile-time text; change it and rebuild.
-
-2. **Server-side suffix** — the self-hosted server appends one instruction to
-   every vision question in `core/providers/vllm/openai.py`:
-
-   ```python
-   question = question + "(请使用中文回复)"
-   ```
-
-   That is the "baked-in" prompt: whatever the model asks, the vision model is
-   also told *"please reply in Chinese"*. It applies only to the built-in
-   OpenAI-compatible VLLM provider; other providers added under
-   `core/providers/vllm/` need the same line before they behave the same way.
-
-Other server settings that affect the answer (`VLLM` provider defaults):
-`max_tokens` 500, `temperature` 0.7, `top_p` 1.0.
-
-## Two independent model paths
+## Default path: photo into the main LLM
 
 ```text
- user speech
+user speech
     │
     ▼
- WebSocket :8000  ──> ASR ──> LLM (text + tools) ──> TTS ──> speaker
+WebSocket :8000  ──> ASR ──> main LLM (tools)
                                 │
                                 │ tools/call self.camera.take_photo
                                 ▼
-                          MCP server on robot
-                                │  HTTP POST (separate connection)
+                       MCP server on robot
+                         Capture() + JPEG
+                                │  MCP image content (base64)
                                 ▼
-                     :8003 /mcp/vision/explain ──> VLM (separate module/key)
+                  server: Action.REQLLM + images
                                 │
-                                └── JSON response
-                                      │
-                    Action.RESPONSE ──┴──> TTS (bypasses the LLM)
-                                      └────> assistant message in dialogue
+                  tool message + user(image)
+                                ▼
+                  main LLM again, same turn (depth+1)
+                                │
+                    text ──> TTS    or    motor tool
 ```
 
-- **Independent:** different endpoints, model, config, API key, and prompt. The
-  VLM receives only `question` + image: no chat history, no robot state, no idea
-  what was said before. The chat LLM never receives pixels.
-- **Coupled:** the tool call is on the critical path of that turn. The robot
-  opens a second HTTP connection while the chat turn waits for the tool result.
-- **Not parallel:** on the device only JPEG encoding runs on a worker thread;
-  the capture itself is on the main task. On the server, the built-in VLM
-  provider makes a **synchronous** OpenAI call inside the async aiohttp handler,
-  so that vision request blocks the server event loop for its duration.
+1. The main LLM calls `self.camera.take_photo` with **no arguments**.
+2. `EspVideo::Capture()` opens the UVC stream, waits **1 s** for
+   auto-exposure, and grabs a frame.
+3. `Camera::WriteJpeg()` encodes it at quality 80 and the tool returns a
+   standard MCP image part:
+   `{"type":"image","mimeType":"image/jpeg","data":"<base64>"}`.
+4. `device_mcp/mcp_executor.py` keeps the image, returns
+   `Action.REQLLM` with `images` attached.
+5. `connection.py` appends the assistant tool call, a text tool result, and a
+   user message containing the image, then calls the main LLM again
+   (`chat(depth+1)`, max depth 5).
+6. The main LLM sees the photo and either speaks or calls another tool (for
+   example `self.motor.drive`). The image message is replaced with `[photo]`
+   after the turn so later turns do not resend ~70 KB of base64.
 
-Configuration is separate too: the chat uses `selected_module.LLM` / `LLM.*`,
-vision uses `selected_module.VLLM` / `VLLM.*`, and the vision endpoint is
-`server.vision_explain` served on `http_port` (8003 by default), not the
-WebSocket port 8000.
+The photo is therefore **not** a side channel: it enters the same model and
+tool loop as the conversation.
 
-## Call flow
+The tool description tells the model to call `take_photo` **by itself**. If it
+batches `take_photo` with `self.motor.drive`, both run before the image exists,
+so the robot would move without having seen anything.
 
-1. The server's LLM calls `tools/call` with
-   `{"name":"self.camera.take_photo","arguments":{"question":"..."}}`.
-2. `McpServer::DoToolCall` schedules the call on the main task and lowers its
-   priority (`TaskPriorityReset(1)`), so camera work does not starve audio.
-3. `EspVideo::Capture()` issues `STREAMON`, waits **1 s** for auto-exposure,
-   and grabs a frame. The UVC stream is not kept open at boot.
-4. `EspVideo::Explain(question)` encodes the frame to JPEG (quality 80,
-   ~0.5 s on a worker thread), then POSTs it to the vision URL.
-5. The server authenticates, base64-encodes the image, and calls the configured
-   `VLLM` module with the question (plus the Chinese suffix).
-6. The server returns `{"success":true,"action":"RESPONSE","response":"..."}`.
-7. The device wraps the body in MCP `content[0].text`.
-8. The server's `device_mcp/mcp_executor.py` parses that text. Because the JSON
-   has an `action` key, it returns `ActionResponse(action=RESPONSE,
-   response=...)`, and `handle/intentHandler.py` sends `response` straight to
-   TTS. **The conversational LLM does not see or rewrite the vision answer**
-   ("视觉大模型不经过二次LLM处理").
+A 720p JPEG is ~40–50 KB, so the MCP payload is ~55–70 KB of base64. This is
+fine over WebSocket (and the base64 string is allocated in PSRAM:
+`CONFIG_SPIRAM_USE_MALLOC=y`, 1 KB internal threshold). An MQTT/UDP transport
+with a smaller payload limit may reject it.
 
-Measured cost: ~1.2 s `STREAMON` + 1 s settle + encode/upload, so roughly
-2–4 s before the vision model's own latency. With
-`CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0` the stream closes at the next
-monitor tick (~0.7 s after the frame), so every photo pays the start cost again.
+Camera backends without a local JPEG encoder report
+`SupportsJpegSnapshot() == false`. On those boards (for example the DVP
+`Esp32Camera`), the firmware keeps the legacy VLM tool under the name
+`take_photo`, so older camera boards do not regress. `EspVideo` (UVC) reports
+true and gets the image tool.
 
-### Why the answer feels rigid
+Verified 2026-11-14: the live `deepseek-flash` endpoint accepts JPEG
+`image_url` parts in this exact message shape (HTTP 200, image tokens counted).
+The main LLM loop already existed for `Action.REQLLM`; only the image plumbing
+was added.
 
-- The vision model's reply is spoken **verbatim**; the agent LLM never
-  paraphrases it. Style, length, and tone come from one vision call.
-- Every question gets the server's `(请使用中文回复)` suffix.
-- `max_tokens` defaults to 500, which caps how much detail can come back.
-- The device's tool description pushes a question/answer framing, not a
-  conversation. It also says "take a photo and then explain it", but the LLM
-  never gets that second turn: the server speaks the vision answer directly.
+## Legacy path: `self.camera.ask_vision` (off by default)
+
+The old behavior is kept for a text-only main LLM or a dedicated vision model.
+It is compiled only when `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y`
+(default `n`) and **replaces** `self.camera.take_photo`, so the model sees one
+camera tool, not two.
+
+```text
+tools/call self.camera.ask_vision {question}
+    -> Capture() + Explain(question)
+    -> POST <vision_explain> (multipart: question + JPEG)
+    -> VLM text
+    -> server: Action.REQLLM(text)   (no longer Action.RESPONSE)
+    -> main LLM decides what to say / which tool to call
+    -> TTS
+```
+
+Changes from the old behavior:
+
+- **Removed** the hardcoded `question + "(请使用中文回复)"` suffix in
+  `core/providers/vllm/openai.py`. The question is now forwarded unchanged.
+- The VLM text is **no longer spoken directly**. `vision_handler.py` returns
+  `Action.REQLLM` and `mcp_executor.py` keeps it that way, so the main LLM
+  composes the reply and can call another tool; the user hears the main LLM,
+  not the raw VLM.
+- The tool was renamed from `take_photo` to `ask_vision`, because it asks a
+  vision model rather than just taking a photo.
+
+Keep this path off unless the main model cannot accept images.
 
 ## Parameters and return
 
-| Item | Value |
+| Tool | Parameters | Return |
+|---|---|---|
+| `self.camera.take_photo` | none | MCP image part (`image/jpeg`) |
+| `self.camera.ask_vision` | `question` string (required) | the vision model's text |
+
+`self.camera.take_photo` fails with `Failed to capture photo` when no camera is
+attached or the UVC open is still pending. The stream closes again at the
+monitor tick (`CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC=0`), so every photo
+pays the ~1.2 s start plus the 1 s settle.
+
+## Timing
+
+| Path | Cost |
 |---|---|
-| Tool name | `self.camera.take_photo` |
-| `question` | string, **required**, no `minLength`/`maxLength` |
-| Return | the raw HTTP response body as MCP text content |
+| Default | ~2.2 s capture + encode/upload + **one** main LLM call |
+| Legacy | ~2.2 s capture + VLM round trip + main LLM round trip |
 
-- `question` is passed through unchanged. An **empty string is legal** and is
-  effectively "describe this image"; the server then prompts only with
-  `(请使用中文回复)`.
-- The answer is not a normal tool result in the LLM sense: the server turns it
-  into `Action.RESPONSE` and speaks `response` directly. A successful call is
-  therefore **not** followed by a second LLM turn.
-- If the response JSON has no `action` key (for example a `success:false`
-  configuration error), the executor falls back to `Action.REQLLM`; only then
-  does the conversational LLM see the raw string and explain it.
-- A device-side tool error (`Failed to capture photo`, etc.) is returned as a
-  JSON-RPC `error` (not a text result); the server raises it. Successful
-  results always carry `"isError": false`.
+The default path replaces the VLM call with image tokens on the main LLM call
+that was going to happen anyway, so it is usually faster and keeps one model's
+persona.
 
-## HTTP contract
+## Legacy HTTP contract
 
-The device POSTs to `server.vision_explain` (default
+`self.camera.ask_vision` POSTs to `server.vision_explain` (default
 `http://<server>:8003/mcp/vision/explain`):
 
 ```text
@@ -144,97 +140,92 @@ part 1: question = <question verbatim>
 part 2: file = camera.jpg, image/jpeg, <JPEG bytes>
 ```
 
-- The URL and token arrive in the server's MCP `initialize` message as
-  `capabilities.vision = {url, token}`; `McpServer::ParseCapabilities()` stores
-  them through `SetExplainUrl()`. A server that never sends that capability
-  leaves the URL empty.
+- The URL/token arrive in the server's MCP `initialize` message as
+  `capabilities.vision = {url, token}`.
 - `vision_handler.py` reads exactly the **first two** multipart parts, in this
-  order. Adding headers or fields is fine; adding a part before `file` breaks
-  the upload.
-- Limits: 5 MB per image; JPEG/PNG/GIF/BMP/TIFF/WEBP accepted; the device always
-  sends JPEG (the 1280×720 frame is ~40–50 KB).
-- Auth: the token is bound to the `Device-Id` header by the server. An expired
-  or mismatched token returns **HTTP 401**, which the device reports as
+  order.
+- Limits: 5 MB per image; JPEG/PNG/GIF/BMP/TIFF/WEBP accepted; the device sends
+  JPEG (~40–50 KB at 720p).
+- A bad or expired token returns **HTTP 401**; the device reports
   `Failed to upload photo`.
 
 ## Failure modes
 
-| Device-side error | Cause |
+| Symptom | Cause / action |
 |---|---|
-| `Failed to capture photo` | No camera attached, UVC open still pending, or camera unplugged. The capture is attempted before the upload, so the ~2 s capture cost is paid even if vision is unconfigured. |
-| `Image explain URL or token is not set` | The server did not send `capabilities.vision` (MCP `initialize` never ran, or a non-XiaoZhi MCP client). |
-| `Failed to upload photo` | Connection/write failure or any non-200 status, including 401. |
-| `Failed to encode image to JPEG` | Encoder failure or empty output. |
-| Tool succeeds but text says `"success": false` | The vision handler answers **HTTP 200** with `{"success":false,"message":"..."}` for configuration errors (e.g. no `VLLM` module selected). The device passes it through; the server sees no `action` key and falls back to `Action.REQLLM`, so the LLM gets the error text. |
+| `Failed to capture photo` | No camera, UVC open pending, or unplugged. |
+| `Camera returned an empty JPEG` | Encoder produced no data. |
+| `JPEG snapshot is not supported by this camera` | The camera backend does not implement `WriteJpeg()` (currently only `EspVideo` does). |
+| Main LLM returns HTTP 400 on the image | The configured main model is text-only. Switch to a multimodal model or enable `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL` and use `ask_vision`. |
+| `Image explain URL or token is not set` (legacy) | The server did not send `capabilities.vision`. |
+| `Failed to upload photo` (legacy) | Connection/write failure or non-200 status, including 401. |
+| `success:false` from the vision handler | Legacy VLM configuration error (e.g. no `VLLM` module); the text now goes to the main LLM. |
 
-A common `success:false` message is `您还未设置默认的视觉分析模块` (no VLLM
-module selected). Auth failures are different: the body says
-`无效的认证token或token已过期`, but with HTTP 401 the device discards it and
-reports `Failed to upload photo`.
-
-## Changing the behavior
+## Configuration
 
 | Goal | Change |
 |---|---|
-| Always describe rather than answer a narrow question | Prompt the model in its persona, or call with `question: ""`; no firmware change needed. |
-| Different wording for the model | Edit the tool description in `main/mcp_server.cc`, rebuild, reflash. |
-| Remove/replace the Chinese-only instruction | Patch `core/providers/vllm/openai.py` (`question + "(请使用中文回复)"`) in the server repo and restart. This affects every vision call. |
-| Longer/shorter answers | Set `max_tokens` on the selected `VLLM` module (default 500). |
-| Different vision model/backend | Select another `VLLM` module in the 智控台, or add a provider under `core/providers/vllm/`. |
-| Point at another vision service | Set `server.vision_explain` in the server config and restart; it must accept the multipart contract above. |
+| Default image-to-main-LLM | nothing; `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=n` |
+| Legacy VLM tool | `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y`, rebuild, reflash |
+| Change image quality | `80` in the `take_photo` callback in `main/mcp_server.cc` |
+| Change legacy vision model | select a `VLLM` module in 智控台 |
+| Change vision endpoint | `server.vision_explain` on the server, restart |
+| Restore the Chinese suffix | add it back in `core/providers/vllm/openai.py` |
 
-The query at `GET /mcp/vision/explain` returns the configured URL and a health
-message, which is the quickest way to confirm the server side is wired up.
+### Deploying
+
+- **Firmware:** `python3 scripts/build.py desk-bot-01 --name desk-bot-01`, then
+  flash as in [../robot/firmware.md](../robot/firmware.md). The tool change is
+  visible in the boot log (`MCP: Add tool: self.camera.take_photo`; no
+  `self.camera.ask_vision` unless the Kconfig option is enabled).
+- **Server:** the docker stack bind-mounts `main/xiaozhi-server/core` into the
+  container, so `docker restart xiaozhi-esp32-server` applies the Python
+  changes; no image rebuild is needed. `docs/mcp-vision-integration.md` in the
+  server repo notes that the VLM path is now optional.
+- **Mixed versions:** a robot on the old firmware still exposes the old
+  `take_photo(question)` tool. The new server routes its VLM text back to the
+  main LLM (instead of TTS), so that combination is safe but still uses the
+  legacy VLM.
 
 ## Can this drive the robot? (collision / edge avoidance)
 
-**No.** `take_photo` is a human-request/response tool, not a control loop.
-Verified constraints:
+Still **no** as a safety loop, but the main LLM can now use the photo in the
+same turn (up to 5 tool rounds), which makes "look, then act" possible as a
+deliberate behavior.
 
-- **Latency.** ~1.2 s `STREAMON` + 1 s auto-exposure + encode/upload, then a
-  VLM call: ~2–4 s per look before model latency. A robot at 60–100 % duty
-  moves a long way in that time.
-- **No continuous stream.** The UVC stream is closed when idle; there is no
-  MJPEG endpoint, only `/photo.jpg`. Frames are produced per tool call.
-- **The image never reaches the decision maker.** The answer is spoken via
-  `Action.RESPONSE`; the main LLM is text-only and gets no pixels. A successful
-  vision call also does not loop back into function calling: the server makes
-  one tool round per user turn (`replyResult` has no tools), so the LLM cannot
-  "look, then decide to drive" in the same turn.
-- **Optics.** 65° FOV, focus range **5–20 cm**, no depth. Good for close
-  objects in front of the lens; poor for reading the desk edge or the floor.
-- **No feedback layer.** The motors are open-loop PWM (no encoders, no current
-  sense). `self.motor.*` just sets duty and an auto-stop timer; nothing in the
-  camera path can stop them in time.
-- **Mount matters.** A single forward/level camera cannot see the cliff under
-  the bumper, which is exactly where a fall starts.
+- **Latency:** ~2.2 s capture + the main LLM call per look. Too slow for
+  reflex avoidance; the robot keeps moving during it.
+- **No continuous stream:** snapshots only; no MJPEG endpoint.
+- **Optics:** 65° FOV, focus **5–20 cm**, no depth. Poor for desk edges.
+- **No feedback:** open-loop PWM motors; no encoders or current sense.
+- **Mount:** a forward/level camera cannot see the cliff under the bumper.
 
-What works instead:
+Use hardware for safety:
 
-| Goal | Approach |
-|---|---|
-| Don't fall off the desk | 2× IR reflectance cliff sensors under the front bumper, or a VL53L0X ToF; a high-priority GPIO task calls `SetMotorSpeeds(0,0)` in milliseconds. Keep it independent of MCP/Wi-Fi/cloud. |
-| Don't bump into objects | VL53L0X (up to ~2 m, I2C on the existing 41/42 bus) or ultrasonic; stop/back off in the reflex loop. |
-| Vision-aware navigation | Keep the stream open (`CONFIG_XIAOZHI_CAMERA_UVC_STREAM_IDLE_SEC` > 0) and run a local detector on-device (ESP-DL) or on a LAN companion at several fps; drive from that loop, not from an MCP call. |
-| Use the VLM for high-level checks | Stop → capture → ask "is the path clear, left or right?" → act. Seconds per step; use for deliberate moves, never as the safety layer. |
-| Put the photo in LLM context | Either fetch `/photo.jpg` server-side and use a multimodal main LLM, or add an image-content tool and patch the server. The device's `ImageContent` return type exists, but `device_mcp/mcp_handler.py` only forwards `content[0].text`, and the main LLM provider has no image message support. |
+- 2× IR cliff sensors under the front bumper, or a downward VL53L0X; a
+  high-priority GPIO task calls `SetMotorSpeeds(0,0)` in milliseconds.
+- VL53L0X ToF (up to ~2 m) on the existing I2C bus (41/42, address `0x29`) or
+  ultrasonic for obstacles.
+- For vision, keep the stream open and run a local detector (ESP-DL or a LAN
+  companion), not an MCP/cloud call.
 
 ## Not MCP: local snapshot
 
-`http://<robot-ip>/photo.jpg` uses the same `Capture()` path and
-`Camera::WriteJpeg()`, but uploads nothing and returns the JPEG directly. It
-does not involve a prompt, a token, or the vision model. See
+`http://<robot-ip>/photo.jpg` uses the same `Capture()` + `Camera::WriteJpeg()`
+path but returns the JPEG to the caller and uploads nothing. See
 [README.md#local-snapshot-over-http-no-vision-model](README.md#local-snapshot-over-http-no-vision-model).
 
 ## Source map
 
 ```text
-main/mcp_server.cc                          # tool description, capabilities parsing
-main/boards/common/esp_video.cc             # Capture(), Explain(), HTTP upload
-main/boards/common/esp_video.h              # explain_url_ / explain_token_
-main/boards/common/camera.h                 # Camera interface
+main/mcp_server.cc                          # take_photo (image) + ask_vision (opt-in)
+main/mcp_server.h                           # standard MCP image content
+main/Kconfig.projbuild                      # XIAOZHI_ENABLE_VLM_CAMERA_TOOL
+main/boards/common/esp_video.cc             # Capture(), WriteJpeg(), Explain()
 main/boards/desk-bot-01/compact_wifi_board.cc  # UVC init, capture lock, hot-plug
-/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/providers/tools/device_mcp/mcp_handler.py  # initialize -> vision url/token
-/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/api/vision_handler.py                       # multipart -> VLLM
-/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/providers/vllm/openai.py                    # "(请使用中文回复)"
+/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/providers/tools/device_mcp/mcp_handler.py  # preserve content list
+/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/providers/tools/device_mcp/mcp_executor.py  # REQLLM + images / legacy text
+/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/connection.py                               # image message + recursive chat
+/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/api/vision_handler.py                       # legacy endpoint: Action.REQLLM
+/Users/wenwu/work/xiaozhi-esp32-server/main/xiaozhi-server/core/providers/vllm/openai.py                    # no Chinese suffix
 ```

@@ -1170,7 +1170,8 @@ menu "Camera Configuration"
 
             Leave this disabled when the main LLM accepts images directly: the
             normal self.camera.take_photo tool returns the photo to the main
-            model. Enable this only for a text-only main LLM.
+            model. Enable this only for a text-only main LLM; it replaces
+            self.camera.take_photo with self.camera.ask_vision.
 
     config XIAOZHI_CAMERA_ALLOW_JPEG_INPUT
         bool "Allow JPEG Input"

@@ -143,13 +143,20 @@ need the original activation flow.
 
 ## Camera snapshot over HTTP
 
-Besides the `self.camera.take_photo` MCP tool (which uploads the photo to the
-server's vision model), the board serves the camera directly on the LAN:
+Besides the `self.camera.take_photo` MCP tool (which returns the photo to the
+server for the main conversation, or to the opt-in legacy VLM tool), the board
+serves the camera directly on the LAN:
 
 ```text
-http://192.168.1.13/           one-button viewer page
-http://192.168.1.13/photo.jpg  take one photo, get a JPEG (?q=1..95)
+http://Xiaozhi-CE50/           one-button viewer page
+http://Xiaozhi-CE50/photo.jpg  take one photo, get a JPEG (?q=1..95)
 ```
+
+`Xiaozhi-CE50` is the DHCP hostname derived from the Wi-Fi MAC, so it survives
+IP changes. The numeric lease is not stable (it moved from `192.168.1.13` to
+`192.168.1.5` on 2026-11-14). For a fixed address, reserve the MAC
+`1c:29:04:3e:ce:50` on the router; otherwise look it up by MAC with
+`arp -an | grep -i 1c:29:04:3e:ce:50` or in the router's client list.
 
 `CameraHttpServer` (`main/boards/common/camera_http_server.{h,cc}`) is started
 from `StartNetwork()` and answers a GET by calling `Capture()` and then

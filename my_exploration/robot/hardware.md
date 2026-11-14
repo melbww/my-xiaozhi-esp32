@@ -22,7 +22,7 @@ USB-UART: CH343 1a86:55d3 "USB Single Serial"
 | Module | ESP32-S3-WROOM-1 N16R8 |
 | Flash | 16 MB, quad, 3.3 V |
 | PSRAM | 8 MB embedded (octal, AP_3v3) |
-| Hostname | `Xiaozhi-CE50` (derived from the MAC, not stored in NVS) |
+| Hostname | `Xiaozhi-CE50` (derived from the MAC, not stored in NVS); use `http://Xiaozhi-CE50/` for the LAN camera page. The numeric DHCP lease is not stable (was `192.168.1.13`, now `192.168.1.5`). |
 | Vendor device ID | `RUK5IES0L128X` in the `id` partition |
 | Board UUID | `0e574ec5-5b44-479d-9293-40a52ccd5b43` (vendor NVS) |
 

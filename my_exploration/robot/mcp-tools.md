@@ -15,6 +15,7 @@ backend (MCP client) discovers tools with `tools/list` and calls them with
 |---|---|---|---|
 | Current (camera/UVC compiled in) | 31 | 24 | 7 |
 | Without the UVC component | 30 | 23 | 7 |
+| With `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y` (replaces `take_photo`) | 31 | 24 | 7 |
 
 The boot log prints the same numbers:
 
@@ -32,7 +33,8 @@ camera is physically attached. Verify on hardware by checking the
 
 Namespaces: `self.motor.*` (13), `self.car.act`, `self.lamp.*` (3),
 `self.rgb_led.*` (3), `self.screen.*` (1 model + 3 user), `self.audio_speaker.*`,
-`self.camera.take_photo`, `self.get_device_status`, `self.get_system_info`,
+`self.camera.take_photo` (image) or `self.camera.ask_vision` (legacy, opt-in),
+`self.get_device_status`, `self.get_system_info`,
 `self.reboot`, `self.upgrade_firmware`, `self.assets.set_download_url`.
 
 ## How the list is exposed
@@ -57,18 +59,23 @@ Example call:
 
 ## Model-visible tools (24)
 
-### Status, audio, screen, camera (4)
+### Status, audio, screen, camera (4 by default; the legacy VLM row is opt-in)
 
 | Tool | Parameters | Behavior / returns |
 |---|---|---|
 | `self.get_device_status` | none | JSON snapshot: `audio_speaker.volume`, `screen` (empty on the 128×64 OLED), `network` (`type`, `ssid`, `signal` strong/medium/weak), and `chip.temperature` when available. No `battery` (this board has no battery ADC). Call before changing volume. |
 | `self.audio_speaker.set_volume` | `volume` int 0..100 (required) | Sets the MAX98357 output volume; returns `true`. |
 | `self.screen.set_theme` | `theme` string (required) | Switches the LVGL theme. Only `dark` is registered by `OledDisplay`, so `light` returns `false` with no change. |
-| `self.camera.take_photo` | `question` string (required) | Opens the UVC stream, captures a frame, uploads it to the server's vision endpoint with the question, and returns the vision server's JSON. On success the server speaks the answer directly instead of re-prompting the LLM. Fails if no camera is attached (`Failed to capture photo`). Stream closes right after capture (idle timeout 0). |
+| `self.camera.take_photo` | none | Opens the UVC stream, captures a frame, and returns it as a standard MCP image part (`image/jpeg`). The server attaches it to the main LLM conversation, so a multimodal model sees the photo itself. Fails if no camera is attached (`Failed to capture photo`). Stream closes right after capture (idle timeout 0). |
+| `self.camera.ask_vision` | `question` string (required) | **Legacy, opt-in** (`CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y`): captures a frame and asks a separate vision model via `capabilities.vision`. Its text now returns to the main LLM instead of being spoken directly. Not registered in the default build. |
 
-`take_photo` has its own page: [../camera/take-photo.md](../camera/take-photo.md)
-covers the exact prompt chain (no device prompt, but the server appends
-`(请使用中文回复)`), the multipart contract, return envelope, and error map.
+On a camera backend without local JPEG support (`SupportsJpegSnapshot()` false,
+e.g. DVP), `take_photo` stays the legacy VLM tool even in the default build;
+UVC `EspVideo` gets the image version.
+
+`take_photo` and the legacy `ask_vision` path have their own page:
+[../camera/take-photo.md](../camera/take-photo.md) covers image ingestion,
+the opt-in VLM branch, the HTTP contract, and the error map.
 
 ### Motion (14)
 
@@ -136,6 +143,7 @@ Do not expect these names, even though other XiaoZhi boards expose them:
 | `self.set_press_to_talk` | `PressToTalkMcpTool` is only wired on xmini/movecall/lckfb boards. |
 | `self.battery.*`, `self.battery.get_level` | No battery voltage divider/ADC in this hardware definition. |
 | `self.system.reconfigure_wifi` | Not registered by `WifiBoard`; use the BOOT-button config mode or erase NVS. |
+| `self.camera.ask_vision` | Legacy VLM tool, disabled by default; enable with `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y`. |
 | `self.motor.sequence`, advanced `self.car.act` sequences | C3 2.2.x vendor features; not in the S3 2.1.0 dump and not implemented. |
 | Vendor `self.rgb_led.*` action names | Only the four tools above exist; no effects/animations. |
 | `self.dog.*`, `self.model.*`, `self.light.*`, `self.chassis.*` | Other boards' tools. |

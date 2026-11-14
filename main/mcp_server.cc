@@ -91,56 +91,68 @@ void McpServer::AddCommonTools() {
 
     auto camera = board.GetCamera();
     if (camera) {
-        AddTool("self.camera.take_photo",
-                "Take a photo with the camera. The photo is returned as an image so you can "
-                "look at the scene yourself. Use this when the user asks you to see "
-                "something, or when you need to check the surroundings before acting.",
-                PropertyList(), [camera](const PropertyList&) -> ToolResult {
-                    // Lower the priority to do the camera capture
-                    TaskPriorityReset priority_reset(1);
+        auto add_vlm_tool = [this, camera](const char* name) {
+            AddTool(name,
+                    "Capture a photo and ask a separate vision model about it. This is the "
+                    "legacy text-only path: use it only when the main model cannot see images.\n"
+                    "Args:\n"
+                    "  `question`: The question to ask about the photo.\n"
+                    "Return:\n"
+                    "  The vision model's text answer.",
+                    PropertyList({Property("question", kPropertyTypeString)}),
+                    [camera](const PropertyList& properties) -> ToolResult {
+                        // Lower the priority to do the camera capture
+                        TaskPriorityReset priority_reset(1);
 
-                    if (!camera->Capture()) {
-                        return std::unexpected("Failed to capture photo");
-                    }
-                    std::string jpeg;
-                    auto written = camera->WriteJpeg(
-                        [&jpeg](const void* data, size_t len) {
-                            jpeg.append(static_cast<const char*>(data), len);
-                            return true;
-                        },
-                        80);
-                    if (!written) {
-                        return std::unexpected(std::move(written.error()));
-                    }
-                    if (jpeg.empty()) {
-                        return std::unexpected("Camera returned an empty JPEG");
-                    }
-                    return new ImageContent("image/jpeg", jpeg);
-                });
+                        if (!camera->Capture()) {
+                            return std::unexpected("Failed to capture photo");
+                        }
+                        auto question = properties["question"].value<std::string>();
+                        auto result = camera->Explain(question);
+                        if (!result) {
+                            return std::unexpected(std::move(result.error()));
+                        }
+                        return std::move(*result);
+                    });
+        };
 
 #ifdef CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL
-        AddTool("self.camera.ask_vision",
-                "Capture a photo and ask a separate vision model about it. This is the "
-                "legacy text-only path: use it only when the main model cannot see images.\n"
-                "Args:\n"
-                "  `question`: The question to ask about the photo.\n"
-                "Return:\n"
-                "  The vision model's text answer.",
-                PropertyList({Property("question", kPropertyTypeString)}),
-                [camera](const PropertyList& properties) -> ToolResult {
-                    // Lower the priority to do the camera capture
-                    TaskPriorityReset priority_reset(1);
+        add_vlm_tool("self.camera.ask_vision");
+#else
+        if (camera->SupportsJpegSnapshot()) {
+            AddTool("self.camera.take_photo",
+                    "Take a photo with the camera. You have a camera, and the photo is "
+                    "returned as an image so you can look at the scene yourself. Use this "
+                    "when the user asks you to see something, or when you need to check the "
+                    "surroundings before acting. Call it by itself, then decide the next "
+                    "action from the photo; do not combine it with a movement command.",
+                    PropertyList(), [camera](const PropertyList&) -> ToolResult {
+                        // Lower the priority to do the camera capture
+                        TaskPriorityReset priority_reset(1);
 
-                    if (!camera->Capture()) {
-                        return std::unexpected("Failed to capture photo");
-                    }
-                    auto question = properties["question"].value<std::string>();
-                    auto result = camera->Explain(question);
-                    if (!result) {
-                        return std::unexpected(std::move(result.error()));
-                    }
-                    return std::move(*result);
-                });
+                        if (!camera->Capture()) {
+                            return std::unexpected("Failed to capture photo");
+                        }
+                        std::string jpeg;
+                        auto written = camera->WriteJpeg(
+                            [&jpeg](const void* data, size_t len) {
+                                jpeg.append(static_cast<const char*>(data), len);
+                                return true;
+                            },
+                            80);
+                        if (!written) {
+                            return std::unexpected(std::move(written.error()));
+                        }
+                        if (jpeg.empty()) {
+                            return std::unexpected("Camera returned an empty JPEG");
+                        }
+                        return new ImageContent("image/jpeg", jpeg);
+                    });
+        } else {
+            // Cameras without a local JPEG encoder (DVP) keep the old VLM tool
+            // under its original name.
+            add_vlm_tool("self.camera.take_photo");
+        }
 #endif
     }
 #endif

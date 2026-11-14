@@ -76,6 +76,9 @@ options.
   capture)` → `Camera connected` (probe only, no `STREAMON`) →
   `Call tool: self.camera.take_photo` → `Explain image size=49708` →
   `Camera idle, stopping UVC stream to save power` right after the capture.
+  (That log predates 2026-11-14, when `take_photo` still returned VLM text; the
+  default now returns the image to the main LLM, but the capture/idle path is
+  the same.)
   Two consecutive captures ~60 s apart were verified: each paid the ~1.3 s
   `STREAMON` + settle and both uploads succeeded, so repeated
   `STREAMON`/`STREAMOFF` cycles are safe.
@@ -116,11 +119,17 @@ options.
   feed and the VBUS splice.
 - Vision is **working end-to-end (2026-11-13)**: `take_photo` → JPEG upload →
   the model's description came back through the self-hosted stack, so the
-  configured vision backend/key is valid. The Mac's LAN IP is `192.168.1.6`, the
-  robot `192.168.1.13`.
+  configured vision backend/key is valid. The Mac's LAN IP is `192.168.1.6`;
+  the robot is reachable as `Xiaozhi-CE50` (DHCP hostname). Its numeric lease
+  changed from `.13` to `.5` on 2026-11-14.
+- **Image-to-main-LLM path (2026-11-14)**: the default tool now returns the JPEG
+  as MCP image content and the server injects it into the `deepseek-flash`
+  conversation (verified against the live endpoint). The separate VLM tool is
+  now `self.camera.ask_vision`, opt-in and off by default. See
+  [take-photo.md](take-photo.md).
 - **Local snapshot over HTTP (2026-11-13, verified on hardware):** the board
   serves `http://<robot-ip>/photo.jpg` plus a one-button viewer at `/`, with no
-  vision model and no server involved. `curl http://192.168.1.13/photo.jpg`
+  vision model and no server involved. `curl http://Xiaozhi-CE50/photo.jpg`
   returned a 1280×720 JPEG (~40 KB) in 0.4–2.5 s. See
   [Local snapshot over HTTP](#local-snapshot-over-http-no-vision-model).
 
@@ -172,8 +181,8 @@ ffmpeg -f avfoundation -framerate 15 -video_size 1280x720 -i "1:none" \
   -frames:v 1 -y cam.jpg
 ```
 
-Nothing here needs a `self.camera.take_photo` capability until the board can
-power the camera.
+The MCP `take_photo` capability was added once the board could power the
+camera; the Mac capture above only identifies the module.
 
 ### 4-pin wiring
 
@@ -460,24 +469,33 @@ before boot (hot-plug is detected), but boot-time connection avoids the 10 s
 
 ## Vision pipeline
 
-The firmware already implements the xiaozhi vision flow:
+There are two paths; the default sends the photo to the **main LLM** (it must
+be multimodal).
 
-1. `McpServer::AddCommonTools()` checks `Board::GetCamera()`. If non-null, it
-   registers `self.camera.take_photo` with a `question` argument.
-2. The server sends an MCP `initialize` message with
-   `capabilities.vision = {url, token}`. `McpServer::ParseCapabilities()` reads
-   it and calls `camera->SetExplainUrl(url, token)`.
-3. When the LLM calls `self.camera.take_photo`:
-   - `Camera::Capture()` grabs a frame.
-   - `Camera::Explain(question)` JPEG-encodes it and POSTs `multipart/form-data`
-     to the explain URL.
-   - Headers include `Device-Id` (MAC), `Client-Id` (UUID), and
-     `Authorization: Bearer <token>` when a token is present.
-   - The server runs a vision model and returns text; the LLM uses that text.
+**Default: `self.camera.take_photo` → main LLM**
 
-Full detail — where the "prompt" comes from, the multipart contract, the return
-envelope, and every failure mode — is in
-**[take-photo.md](take-photo.md)**.
+1. `McpServer::AddCommonTools()` registers `self.camera.take_photo` with no
+   arguments when `Board::GetCamera()` is non-null.
+2. The tool calls `Camera::Capture()` and `Camera::WriteJpeg()` and returns a
+   standard MCP image part (`image/jpeg`).
+3. The server's `device_mcp` executor keeps the image and returns
+   `Action.REQLLM`; `connection.py` appends a tool result plus a user message
+   containing the image, then calls the main LLM again with tools.
+4. The main LLM sees the photo, answers, or calls another tool (for example a
+   motor tool). The image is replaced with `[photo]` after the turn.
+
+**Legacy: `self.camera.ask_vision` → separate VLM (opt-in)**
+
+- Enabled only with `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y` (default `n`).
+- The server sends `capabilities.vision = {url, token}` in MCP `initialize`;
+  `McpServer::ParseCapabilities()` calls `camera->SetExplainUrl(url, token)`.
+- `Camera::Explain(question)` JPEG-encodes the frame and POSTs
+  `multipart/form-data` to the explain URL with `Device-Id` (MAC), `Client-Id`
+  (UUID), and `Authorization: Bearer <token>`.
+- The text now returns to the main LLM (`Action.REQLLM`), not straight to TTS.
+
+Full detail — tool contract, image ingestion, the legacy multipart contract,
+and every failure mode — is in **[take-photo.md](take-photo.md)**.
 
 Relevant code:
 
@@ -512,16 +530,22 @@ details: [../server/README.md](../server/README.md).
 
 ## Local snapshot over HTTP (no vision model)
 
-`self.camera.take_photo` is the only camera MCP tool and it always ends in
-`Explain()`: a JPEG upload to the server's `vision_explain` URL. To look at a
-photo yourself, without a vision model and without the xiaozhi server at all,
+The MCP path sends the photo into the conversation (default) or to the legacy
+VLM; either way it leaves the robot. To look at a photo yourself, without a
+model and without the xiaozhi server at all,
 `desk-bot-01` also runs a tiny HTTP server on the device
 (`CameraHttpServer`, `main/boards/common/camera_http_server.cc`):
 
 | URL | Result |
 |---|---|
-| `http://192.168.1.13/photo.jpg` | take one photo and return it as JPEG; `?q=1..95`, default 80 |
-| `http://192.168.1.13/` | one-button viewer page (size + round-trip time) |
+| `http://Xiaozhi-CE50/photo.jpg` | take one photo and return it as JPEG; `?q=1..95`, default 80 |
+| `http://Xiaozhi-CE50/` | one-button viewer page (size + round-trip time) |
+
+- `Xiaozhi-CE50` is the DHCP hostname derived from the Wi-Fi MAC, so it
+  survives IP changes (the lease moved from `.13` to `.5` on 2026-11-14). It is
+  not mDNS, so `Xiaozhi-CE50.local` does not resolve. For a fixed numeric
+  address, reserve MAC `1c:29:04:3e:ce:50` on the router, or find the current
+  lease with `arp -an | grep -i 1c:29:04:3e:ce:50`.
 
 - Same capture path as the MCP tool: `Capture()` opens the UVC stream, waits 1 s
   for auto-exposure, and the monitor closes it at the next tick because
@@ -578,7 +602,7 @@ photo yourself, without a vision model and without the xiaozhi server at all,
       captured photo, 2026-11-13).
 - [x] Robot can reach the server IP/port.
 - [x] Local snapshot, no vision model:
-      `curl -s http://192.168.1.13/photo.jpg -o cam.jpg` returns a 1280×720
+      `curl -s http://Xiaozhi-CE50/photo.jpg -o cam.jpg` returns a 1280×720
       JPEG (2026-11-13, 0.4–2.5 s per request).
 - [x] Camera preview decode is skipped on the OLED (`SupportsPreviewImage()`
       false), which removed the ~3 s/photo preview cost (2026-11-13).

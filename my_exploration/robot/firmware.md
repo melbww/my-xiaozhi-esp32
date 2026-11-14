@@ -109,6 +109,11 @@ notes in
 fall detection for `move_forward` / `quick_forward` (no edge/distance sensor),
 `self.screen.set_brightness` (no backlight), and battery tools.
 
+`self.camera.take_photo` returns a JPEG to the main multimodal LLM. The old
+separate-VLM tool is now named `self.camera.ask_vision` and is compiled only
+with `CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL=y` (default off; it replaces
+`take_photo`, so the count stays 31 tools / 24 visible).
+
 Expected boot line on a camera-enabled build:
 
 ```text

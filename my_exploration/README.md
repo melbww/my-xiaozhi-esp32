@@ -16,7 +16,7 @@ self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 | OTA / WebSocket | Self-hosted server, `192.168.1.6:8002` / `:8000` |
 | TTS | Local macOS `say` via `CustomTTS` (fast); Edge TTS available |
 | `digital-human` runtime | Stopped; **not part of the robot path** |
-| Camera / vision | USB UVC camera on the robot (external 5 V), hot-pluggable at any time including after boot; stream opens on demand for `take_photo` and closes right after (idle timeout `0`); OLED icons for camera present vs capturing; vision works end-to-end; `http://<robot-ip>/photo.jpg` serves a snapshot with no vision model |
+| Camera / vision | USB UVC camera (external 5 V), hot-pluggable; stream opens on demand and closes right after (idle timeout `0`); `take_photo` returns the image to the main multimodal LLM; legacy `ask_vision` VLM tool is opt-in and off; `http://<robot-ip>/photo.jpg` serves a snapshot |
 | Motors / LED | Not yet verified on hardware |
 | Wi-Fi / OLED / audio | Verified in boot logs; OLED visual check pending |
 
