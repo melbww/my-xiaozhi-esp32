@@ -35,6 +35,42 @@ argument verbatim to the server. Two pieces of fixed text shape the result:
 Other server settings that affect the answer (`VLLM` provider defaults):
 `max_tokens` 500, `temperature` 0.7, `top_p` 1.0.
 
+## Two independent model paths
+
+```text
+ user speech
+    │
+    ▼
+ WebSocket :8000  ──> ASR ──> LLM (text + tools) ──> TTS ──> speaker
+                                │
+                                │ tools/call self.camera.take_photo
+                                ▼
+                          MCP server on robot
+                                │  HTTP POST (separate connection)
+                                ▼
+                     :8003 /mcp/vision/explain ──> VLM (separate module/key)
+                                │
+                                └── JSON response
+                                      │
+                    Action.RESPONSE ──┴──> TTS (bypasses the LLM)
+                                      └────> assistant message in dialogue
+```
+
+- **Independent:** different endpoints, model, config, API key, and prompt. The
+  VLM receives only `question` + image: no chat history, no robot state, no idea
+  what was said before. The chat LLM never receives pixels.
+- **Coupled:** the tool call is on the critical path of that turn. The robot
+  opens a second HTTP connection while the chat turn waits for the tool result.
+- **Not parallel:** on the device only JPEG encoding runs on a worker thread;
+  the capture itself is on the main task. On the server, the built-in VLM
+  provider makes a **synchronous** OpenAI call inside the async aiohttp handler,
+  so that vision request blocks the server event loop for its duration.
+
+Configuration is separate too: the chat uses `selected_module.LLM` / `LLM.*`,
+vision uses `selected_module.VLLM` / `VLLM.*`, and the vision endpoint is
+`server.vision_explain` served on `http_port` (8003 by default), not the
+WebSocket port 8000.
+
 ## Call flow
 
 1. The server's LLM calls `tools/call` with

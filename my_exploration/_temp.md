@@ -46,3 +46,16 @@ let's do this to reduce power consumption
 
 flip cam
 flip green red color
+
+--
+
+
+i believe we are already using deepseek v4.1, which is already a multimodal LLM, can we just keep the MCP simply as a photo taking tool, and always ingest the photo to the main LLM thread; 
+
+for the existing MCP, we can keep it but should be adjust:
+- remove 请使用中文回复
+- the VLM returned text shouldn't directly go the TTS and speaker, instead shound send back to the main LLM for what to do next, and then the main LLM can decide if what should be sent to TTS and speaker.
+- name it to something more descriptive of this function
+- turn it off for now; and we can use it for some non-multimodal main LLM in the future.
+
+

@@ -371,12 +371,13 @@ public:
             if (owned_image == nullptr) {
                 return std::unexpected("MCP tool returned an empty image");
             }
-            CJsonUniquePtr image(cJSON_CreateObject());
+            // ImageContent::to_json() already produces a standard MCP image part
+            // ({"type":"image","mimeType":...,"data":...}); add it directly instead
+            // of nesting the JSON as a string.
+            CJsonUniquePtr image(cJSON_Parse(owned_image->to_json().c_str()));
             if (image == nullptr) {
-                return std::unexpected("Failed to allocate MCP image result");
+                return std::unexpected("Failed to serialize MCP image result");
             }
-            cJSON_AddStringToObject(image.get(), "type", "image");
-            cJSON_AddStringToObject(image.get(), "image", owned_image->to_json().c_str());
             if (!cJSON_AddItemToArray(content.get(), image.get())) {
                 return std::unexpected("Failed to create MCP image result");
             }

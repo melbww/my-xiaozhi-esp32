@@ -92,12 +92,40 @@ void McpServer::AddCommonTools() {
     auto camera = board.GetCamera();
     if (camera) {
         AddTool("self.camera.take_photo",
-                "Always remember you have a camera. If the user asks you to see something, use "
-                "this tool to take a photo and then explain it.\n"
+                "Take a photo with the camera. The photo is returned as an image so you can "
+                "look at the scene yourself. Use this when the user asks you to see "
+                "something, or when you need to check the surroundings before acting.",
+                PropertyList(), [camera](const PropertyList&) -> ToolResult {
+                    // Lower the priority to do the camera capture
+                    TaskPriorityReset priority_reset(1);
+
+                    if (!camera->Capture()) {
+                        return std::unexpected("Failed to capture photo");
+                    }
+                    std::string jpeg;
+                    auto written = camera->WriteJpeg(
+                        [&jpeg](const void* data, size_t len) {
+                            jpeg.append(static_cast<const char*>(data), len);
+                            return true;
+                        },
+                        80);
+                    if (!written) {
+                        return std::unexpected(std::move(written.error()));
+                    }
+                    if (jpeg.empty()) {
+                        return std::unexpected("Camera returned an empty JPEG");
+                    }
+                    return new ImageContent("image/jpeg", jpeg);
+                });
+
+#ifdef CONFIG_XIAOZHI_ENABLE_VLM_CAMERA_TOOL
+        AddTool("self.camera.ask_vision",
+                "Capture a photo and ask a separate vision model about it. This is the "
+                "legacy text-only path: use it only when the main model cannot see images.\n"
                 "Args:\n"
-                "  `question`: The question that you want to ask about the photo.\n"
+                "  `question`: The question to ask about the photo.\n"
                 "Return:\n"
-                "  A JSON object that provides the photo information.",
+                "  The vision model's text answer.",
                 PropertyList({Property("question", kPropertyTypeString)}),
                 [camera](const PropertyList& properties) -> ToolResult {
                     // Lower the priority to do the camera capture
@@ -113,6 +141,7 @@ void McpServer::AddCommonTools() {
                     }
                     return std::move(*result);
                 });
+#endif
     }
 #endif
 

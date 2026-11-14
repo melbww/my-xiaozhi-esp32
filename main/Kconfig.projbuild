@@ -1160,6 +1160,18 @@ menu "Camera Configuration"
             Set to 0 to close the stream immediately after each photo. Only UVC
             cameras are affected; built-in CSI/DVP sensors keep streaming.
 
+    config XIAOZHI_ENABLE_VLM_CAMERA_TOOL
+        bool "Enable legacy self.camera.ask_vision tool"
+        default n
+        help
+            Register a second camera tool that captures a photo and sends it to
+            the backend's vision endpoint (MCP capabilities.vision) for a text
+            answer.
+
+            Leave this disabled when the main LLM accepts images directly: the
+            normal self.camera.take_photo tool returns the photo to the main
+            model. Enable this only for a text-only main LLM.
+
     config XIAOZHI_CAMERA_ALLOW_JPEG_INPUT
         bool "Allow JPEG Input"
         default n
