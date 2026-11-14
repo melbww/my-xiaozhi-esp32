@@ -33,8 +33,24 @@ public:
     DeskBot01StatusLed(gpio_num_t gpio, uint16_t max_leds) : strip_(gpio, max_leds) {}
 
     void OnStateChanged() override {
-        if (!override_active_) {
-            strip_.OnStateChanged();
+        if (override_active_) {
+            return;
+        }
+        // This board uses green while listening and blue while speaking, the
+        // reverse of the shared CircularStrip mapping. All other states keep the
+        // shared status effects.
+        switch (Application::GetInstance().GetDeviceState()) {
+            case kDeviceStateListening:
+            case kDeviceStateAudioTesting:
+                strip_.SetAllColor(StripColor{0, kStatusBrightness, 0});
+                break;
+            case kDeviceStateSpeaking:
+            case kDeviceStateNotifying:
+                strip_.SetAllColor(StripColor{0, 0, kStatusBrightness});
+                break;
+            default:
+                strip_.OnStateChanged();
+                break;
         }
     }
 
@@ -45,10 +61,13 @@ public:
 
     void RestoreDefault() {
         override_active_ = false;
-        strip_.OnStateChanged();
+        OnStateChanged();
     }
 
 private:
+    // Matches CircularStrip's default brightness for solid status colors.
+    static constexpr uint8_t kStatusBrightness = 32;
+
     CircularStrip strip_;
     bool override_active_ = false;
 };

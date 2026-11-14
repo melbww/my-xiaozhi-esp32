@@ -25,6 +25,12 @@ BOM; the vendor's original `compact_wifi_board.cc` was not available.
 | Status LEDs | 7x WS2812 strip on GPIO38 |
 | Power | 1S battery + protection + 3-pin switch + 5 V boost |
 
+Status LED colors: off when idle, green while listening, blue while
+speaking/notifying. Other states keep the upstream `CircularStrip` effects
+(blue while booting, Wi-Fi configuring, or connecting; green blink while
+activating or upgrading). `self.rgb_led.set_color` / `self.lamp.*` override these
+until `self.rgb_led.restore_default_idle`.
+
 ## Pin map
 
 | Signal | GPIO |

@@ -153,6 +153,13 @@ The strip on GPIO38 is the only light on this revision. Tool commands override
 the normal status colors until `self.rgb_led.restore_default_idle`. `lamp.*`
 also drives the vendor's unused GPIO18 lamp output.
 
+Status colors while no override is active: off when idle, **green while
+listening**, **blue while speaking/notifying**. Every other state keeps the
+shared `CircularStrip` colors (blue while booting, Wi-Fi configuring, or
+connecting; green blink while activating or upgrading). Green/blue for
+listening/speaking are board-local overrides of the shared defaults
+(red/green), set in `DeskBot01StatusLed::OnStateChanged()`.
+
 | Tool | Parameters | Behavior / returns |
 |---|---|---|
 | `self.lamp.get_state` | none | `{"power": true}` or `{"power": false}`. Tracks the last on/off/color command, not measured current. |
