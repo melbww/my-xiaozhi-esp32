@@ -53,6 +53,7 @@ See [server/README.md](server/README.md) and [server/tts.md](server/tts.md).
 | [server/README.md](server/README.md) | Self-hosted stack, OTA/WS, activation, logs |
 | [server/tts.md](server/tts.md) | TTS options, latency diagnosis, local `say`, barge-in |
 | [camera/README.md](camera/README.md) | USB UVC camera, firmware support, vision pipeline |
+| [camera/take-photo.md](camera/take-photo.md) | `take_photo` prompt chain, HTTP contract, return envelope, errors |
 | [docs/framework-layers.md](docs/framework-layers.md) | Build/runtime/NVS/cloud layers; why Wi-Fi, display, and wake word behave as they do |
 | [vendor/README.md](vendor/README.md) | Vendor BOM/wiring and inventory |
 | [.archive/README.md](.archive/README.md) | Archived deep dives, history, background research |

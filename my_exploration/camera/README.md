@@ -475,6 +475,10 @@ The firmware already implements the xiaozhi vision flow:
      `Authorization: Bearer <token>` when a token is present.
    - The server runs a vision model and returns text; the LLM uses that text.
 
+Full detail — where the "prompt" comes from, the multipart contract, the return
+envelope, and every failure mode — is in
+**[take-photo.md](take-photo.md)**.
+
 Relevant code:
 
 ```
@@ -497,10 +501,11 @@ then confirm the log line `视觉分析接口是 http://192.168.1.6:8003/...` an
 the robot can reach `192.168.1.6:8003` (open the Mac firewall). Restart the
 server after changing `vision_explain`.
 
-Current local state (2026-11-11): the stack at `192.168.1.6` is configured for
-OTA + WebSocket but was down during the last camera test, and
-`VLLM_ChatGLMVLLM` still holds a placeholder API key, so vision cannot answer
-yet. Server details: [../server/README.md](../server/README.md).
+Current local state (2026-11-13): vision works end-to-end through the
+self-hosted stack at `192.168.1.6` with a valid `VLLM` module and key. If it
+regresses, check the selected module and `server.vision_explain` first; the
+prompt chain and error map are in [take-photo.md](take-photo.md). Server
+details: [../server/README.md](../server/README.md).
 
 > Earlier USB-host test, build recipe, diagnostic patch, and detailed formats:
 > [.archive/camera/usb-host-test.md](../.archive/camera/usb-host-test.md).

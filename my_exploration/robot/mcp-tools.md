@@ -64,7 +64,11 @@ Example call:
 | `self.get_device_status` | none | JSON snapshot: `audio_speaker.volume`, `screen` (empty on the 128×64 OLED), `network` (`type`, `ssid`, `signal` strong/medium/weak), and `chip.temperature` when available. No `battery` (this board has no battery ADC). Call before changing volume. |
 | `self.audio_speaker.set_volume` | `volume` int 0..100 (required) | Sets the MAX98357 output volume; returns `true`. |
 | `self.screen.set_theme` | `theme` string (required) | Switches the LVGL theme. Only `dark` is registered by `OledDisplay`, so `light` returns `false` with no change. |
-| `self.camera.take_photo` | `question` string (required) | Opens the UVC stream, captures a frame, uploads it to the server's vision endpoint with the question, and returns the model's JSON answer. Fails if no camera is attached (`Failed to capture photo`). Stream closes right after capture (idle timeout 0). |
+| `self.camera.take_photo` | `question` string (required) | Opens the UVC stream, captures a frame, uploads it to the server's vision endpoint with the question, and returns the vision server's JSON. On success the server speaks the answer directly instead of re-prompting the LLM. Fails if no camera is attached (`Failed to capture photo`). Stream closes right after capture (idle timeout 0). |
+
+`take_photo` has its own page: [../camera/take-photo.md](../camera/take-photo.md)
+covers the exact prompt chain (no device prompt, but the server appends
+`(请使用中文回复)`), the multipart contract, return envelope, and error map.
 
 ### Motion (14)
 

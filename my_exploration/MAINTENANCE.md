@@ -39,6 +39,7 @@ These docs were split from one long context file on 2026-11-09. The goal is
 | Server stack, OTA/WS, activation, logs | [server/README.md](server/README.md) |
 | TTS, latency, barge-in, voice choices | [server/tts.md](server/tts.md) |
 | Camera, USB power, vision pipeline | [camera/README.md](camera/README.md) |
+| `take_photo` prompt/HTTP/error detail | [camera/take-photo.md](camera/take-photo.md) |
 | Framework layers, NVS persistence, OTA/cloud selection, display/wake-word wiring | [docs/framework-layers.md](docs/framework-layers.md) |
 | Vendor BOM/wiring | [vendor/](vendor/) |
 | Dated experiments / decisions (not current) | `.archive/history/YYYY-MM-*.md` |
