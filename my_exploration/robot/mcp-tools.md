@@ -59,6 +59,48 @@ Example call:
            "arguments":{"steer":20,"throttle":60,"duration_ms":1500}}}
 ```
 
+## Manual testing from a browser
+
+The device hosts a console on port 81 that calls the **same** `McpServer`
+registry the model uses, so names, schemas, validation, and side effects are
+identical:
+
+```text
+http://Xiaozhi-CE50:81/      generated controls for every tool
+http://Xiaozhi-CE50:81/mcp   POST a JSON-RPC request, get the response
+```
+
+- The page loads `tools/list` with `withUserTools: true`, so all 31 tools
+  appear. Untick **user-only tools** to see only the 24 the model gets.
+- Controls are generated from each property schema: integer ranges become
+  sliders, strings become text fields, `self.car.act` gets an action dropdown,
+  and `self.rgb_led.set_color` gets a color picker.
+- `self.motor.drive` gets a drag pad. Dragging sends `duration_ms: 0`;
+  releasing calls `self.motor.stop`. The red **STOP** button (or `Esc`)
+  always stops the motors, and leaving the page stops them too.
+- Tools that run longer than the first HTTP round trip answer `202`; the page
+  polls `GET /mcp/result?id=N` and shows the result when it arrives (up to
+  60 s). This covers camera capture and `self.screen.snapshot`.
+- `self.screen.snapshot` pre-fills `http://<device-ip>:81/snapshot`. The
+  device stores the uploaded JPEG and the page shows it from `/snapshot.jpg`.
+  `self.screen.preview_image` pre-fills that same image URL, so a snapshot can
+  be replayed to the OLED without another tool. The upload sends
+  `Content-Length` framing because ESP-IDF's `httpd` cannot decode chunked
+  request bodies.
+- `self.reboot` and `self.upgrade_firmware` ask for confirmation.
+- The console runs even when the XiaoZhi server is stopped or the device is
+  not bound, which separates firmware faults from backend faults.
+- It is plain HTTP with **no authentication**. Anyone on the LAN can move the
+  robot, change the volume, or reboot it. Do not forward port 81 outside the
+  LAN, and do not leave a browser page open on a shared machine.
+- `self.camera.take_photo` shows the image in the browser but does not send it
+  to the LLM; testing the image path into the model still needs a real
+  conversation. `self.camera.ask_vision` is not registered in the default
+  build.
+
+Implementation: `main/boards/common/mcp_http_console.{h,cc}`, started from
+`DeskBot01Board::StartNetwork()`.
+
 ## Model-visible tools (24)
 
 ### Status, audio, screen, camera (4 by default; the legacy VLM row is opt-in)

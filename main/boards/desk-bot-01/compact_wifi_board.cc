@@ -7,6 +7,7 @@
 #include "display/oled_display.h"
 #include "esp_video.h"
 #include "led/circular_strip.h"
+#include "mcp_http_console.h"
 #include "mcp_server.h"
 #include "system_reset.h"
 #include "wifi_board.h"
@@ -562,6 +563,9 @@ public:
 
     virtual void StartNetwork() override {
         WifiBoard::StartNetwork();
+        // Point-and-click console for every MCP tool: http://<robot-ip>:81/.
+        // It also works with the xiaozhi server stopped or disconnected.
+        McpHttpConsole::Start(81);
         // Pull-based camera snapshot for humans: http://<robot-ip>/photo.jpg.
         // The frame is served directly and never sent to the vision model.
         if (camera_ != nullptr) {

@@ -236,9 +236,25 @@ void McpServer::AddUserOnlyTools() {
 
                 // 构造multipart/form-data请求体
                 std::string boundary = "----ESP32_SCREEN_SNAPSHOT_BOUNDARY";
+                std::string file_header;
+                file_header += "--" + boundary + "\r\n";
+                file_header +=
+                    "Content-Disposition: form-data; name=\"file\"; "
+                    "filename=\"screenshot.jpg\"\r\n";
+                file_header += "Content-Type: image/jpeg\r\n";
+                file_header += "\r\n";
+                std::string multipart_footer = "\r\n--" + boundary + "--\r\n";
+                const size_t content_length =
+                    file_header.size() + jpeg_data.size() + multipart_footer.size();
 
                 auto http = Board::GetInstance().GetNetwork()->CreateHttp(3);
                 http->SetHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+                // ESP-IDF's httpd (and other small receivers) cannot decode a
+                // chunked request body. An explicit length plus an empty content
+                // buffer keeps the HTTP client on the Content-Length path while
+                // the parts below stream without copying the JPEG again.
+                http->SetContent(std::string());
+                http->SetHeader("Content-Length", std::to_string(content_length));
                 if (auto opened = http->Open("POST", url); !opened) {
                     return std::unexpected("Failed to open URL: " + url + " (" +
                                            opened.error().ToString() + ")");
@@ -250,20 +266,9 @@ void McpServer::AddUserOnlyTools() {
                     }
                     return std::nullopt;
                 };
-                {
-                    // 文件字段头部
-                    std::string file_header;
-                    file_header += "--" + boundary + "\r\n";
-                    file_header +=
-                        "Content-Disposition: form-data; name=\"file\"; "
-                        "filename=\"screenshot.jpg\"\r\n";
-                    file_header += "Content-Type: image/jpeg\r\n";
-                    file_header += "\r\n";
-                    if (auto error = write_or_fail(file_header.c_str(), file_header.size());
-                        error) {
-                        http->Close();
-                        return std::unexpected("Failed to upload screenshot: " + *error);
-                    }
+                if (auto error = write_or_fail(file_header.c_str(), file_header.size()); error) {
+                    http->Close();
+                    return std::unexpected("Failed to upload screenshot: " + *error);
                 }
 
                 // JPEG数据
@@ -273,16 +278,10 @@ void McpServer::AddUserOnlyTools() {
                     return std::unexpected("Failed to upload screenshot: " + *error);
                 }
 
-                {
-                    // multipart尾部
-                    std::string multipart_footer;
-                    multipart_footer += "\r\n--" + boundary + "--\r\n";
-                    if (auto error =
-                            write_or_fail(multipart_footer.c_str(), multipart_footer.size());
-                        error) {
-                        http->Close();
-                        return std::unexpected("Failed to upload screenshot: " + *error);
-                    }
+                if (auto error = write_or_fail(multipart_footer.c_str(), multipart_footer.size());
+                    error) {
+                    http->Close();
+                    return std::unexpected("Failed to upload screenshot: " + *error);
                 }
                 if (auto error = write_or_fail("", 0); error) {
                     http->Close();

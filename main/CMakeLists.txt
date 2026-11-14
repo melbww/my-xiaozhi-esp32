@@ -59,6 +59,7 @@ list(APPEND SOURCES
     "boards/common/camera_http_server.cc"
     "boards/common/i2c_device.cc"
     "boards/common/knob.cc"
+    "boards/common/mcp_http_console.cc"
     "boards/common/power_save_timer.cc"
     "boards/common/press_to_talk_mcp_tool.cc"
     "boards/common/sleep_timer.cc"

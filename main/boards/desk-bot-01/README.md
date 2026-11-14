@@ -141,6 +141,25 @@ The upstream XiaoZhi firmware does not implement the vendor's
 the `id` partition but does not read it. Use the vendor firmware/backup if you
 need the original activation flow.
 
+## MCP tool console over HTTP
+
+`McpHttpConsole` (`main/boards/common/mcp_http_console.{h,cc}`) serves a
+browser console on port 81 and is started from `StartNetwork()` even when no
+camera is attached:
+
+```text
+http://Xiaozhi-CE50:81/          controls generated from tools/list
+http://Xiaozhi-CE50:81/mcp       JSON-RPC POST endpoint
+http://Xiaozhi-CE50:81/snapshot  receiver for self.screen.snapshot
+http://Xiaozhi-CE50:81/snapshot.jpg
+```
+
+It reuses the real `McpServer`, so every tool (including the 7 user-only ones)
+can be exercised without the LLM or the xiaozhi server. Long tools return
+`202` and the page polls `/mcp/result?id=N`; that keeps the HTTP task free
+while `self.screen.snapshot` posts its JPEG back to the same server. There is
+no authentication: LAN use only.
+
 ## Camera snapshot over HTTP
 
 Besides the `self.camera.take_photo` MCP tool (which returns the photo to the

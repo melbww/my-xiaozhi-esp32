@@ -5,7 +5,7 @@ N16R8) that was backed up, reverse-engineered, and reflashed with a custom
 `desk-bot-01` board definition in this repository. It also covers the
 self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 
-**Last verified:** 2026-11-13
+**Last verified:** 2026-11-14
 
 ## Current state
 
@@ -17,6 +17,7 @@ self-hosted `xiaozhi-esp32-server` stack, TTS tuning, and the USB camera work.
 | TTS | Local macOS `say` via `CustomTTS` (fast); Edge TTS available |
 | `digital-human` runtime | Stopped; **not part of the robot path** |
 | Camera / vision | USB UVC camera (external 5 V), hot-pluggable; stream opens on demand and closes right after (idle timeout `0`); `take_photo` returns the image to the main multimodal LLM; legacy `ask_vision` VLM tool is opt-in and off; `http://<robot-ip>/photo.jpg` serves a snapshot |
+| MCP console | `http://<robot-ip>:81/` — browser controls for all 31 tools, no LLM or server needed; firmware built, on-device check pending |
 | Motors / LED | Not yet verified on hardware |
 | Wi-Fi / OLED / audio | Verified in boot logs; OLED visual check pending |
 
